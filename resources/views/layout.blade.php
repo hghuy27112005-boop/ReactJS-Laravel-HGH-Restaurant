@@ -41,10 +41,10 @@
             <a href="{{ url('/') }}">NHÀ HÀNG HGH</a>
         </div>
         <nav class="main-nav">
-            <a href="{{ url('/gioi-thieu') }}">Giới Thiệu</a>
-            <a href="{{ url('/menu') }}">Menu</a> 
-            <a href="{{ route('transaction_history') }}">Lịch sử giao dịch</a>
-            <a href="{{ url('/lien-he') }}">Liên Hệ</a>
+            <a href="{{ url('/gioi-thieu') }}" class="{{ Request::is('gioi-thieu') ? 'active' : '' }}">Giới Thiệu</a>
+            <a href="{{ url('/menu') }}" class="{{ Request::is('menu*') ? 'active' : '' }}">Menu</a> 
+            <a href="{{ route('transaction_history') }}" class="{{ Request::is('transaction-history') || Request::is('booking-history') ? 'active' : '' }}">Lịch sử giao dịch</a>
+            <a href="{{ url('/lien-he') }}" class="{{ Request::is('lien-he') ? 'active' : '' }}">Liên Hệ</a>
         </nav>
         <div class="user-actions">
             <a href="{{ url('/gio-hang') }}" class="action-btn">

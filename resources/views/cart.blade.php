@@ -378,7 +378,7 @@
         </table>
         <div style="display:flex; justify-content: flex-end; gap: 10px; margin-top:15px;">
             <button class="btn-action" style="background:#eee;color:#333;" onclick="closeModal('editQtyDatBanModal')">Hủy</button>
-            <button class="btn-action" style="background:#27ae60;" onclick="updateQty('datban')">Cập Nhật</button>
+            <button class="btn-action" style="background:#C0392B;" onclick="updateQty('datban')">Cập Nhật</button>
         </div>
     </div>
 </div>
@@ -739,13 +739,18 @@
 
     let bookingData = {
         currentStep: 1,
-        totalTables: sessionVars.totalTables,
-        types: sessionVars.types ? JSON.parse(sessionVars.types) : { type5: 0, type10: 0, type20: 0 },
-        selectedTables: sessionVars.tableNumbers ? sessionVars.tableNumbers.split(',').map(t => parseInt(t.trim())) : [],
+        totalTables: parseInt(sessionVars.totalTables) || 1,
+        types: sessionVars.types && typeof sessionVars.types === 'object' ? sessionVars.types : { type5: 1, type10: 0, type20: 0 },
+        selectedTables: Array.isArray(sessionVars.tableNumbers) ? sessionVars.tableNumbers.map(n => ({ tableNumber: n, type: 0 })) : [], // Format has changed to objects in step 3
         date: sessionVars.startDate || '',
         startTime: sessionVars.startTime || '',
         endTime: sessionVars.endTime || ''
     };
+
+    // Fix selectedTables format if it was just numbers
+    if (bookingData.selectedTables.length > 0 && typeof bookingData.selectedTables[0] === 'number') {
+        bookingData.selectedTables = bookingData.selectedTables.map(n => ({ tableNumber: n, type: 0 }));
+    }
 
     function initWizardSelection() {
         const n = bookingData.totalTables;

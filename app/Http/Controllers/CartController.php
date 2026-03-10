@@ -19,7 +19,7 @@ class CartController extends Controller
         // CHẶN: Nếu đã xác nhận (checkout) mà chưa thanh toán xong
         if (session('last_confirmed_' . $type) && !session('paid_' . $type)) {
             return response()->json([
-                'status' => 'error', 
+                'status' => 'error',
                 'message' => 'Bạn có đơn hàng [' . ($type == 'mang-ve' ? 'Mang về' : 'Tại bàn') . '] đang chờ thanh toán. Vui lòng hoàn tất thanh toán trước khi thêm món mới!'
             ], 403);
         }
@@ -27,13 +27,14 @@ class CartController extends Controller
         $cart = session()->get('cart', []);
         $cartKey = $id . '_' . $type;
 
-        if(isset($cart[$cartKey])) {
+        if (isset($cart[$cartKey])) {
             $cart[$cartKey]['quantity'] += $request->quantity;
-            $cart[$cartKey]['created_at'] = now()->format('H:i d/m/Y'); 
-            if($request->note) {
+            $cart[$cartKey]['created_at'] = now()->format('H:i d/m/Y');
+            if ($request->note) {
                 $cart[$cartKey]['note'] = $request->note;
             }
-        } else {
+        }
+        else {
             $cart[$cartKey] = [
                 "dish_id" => $id,
                 "name" => $request->dish_name,
@@ -55,13 +56,16 @@ class CartController extends Controller
     {
         $cart = session()->get('cart', []);
         if ($request->has('updates')) {
-            foreach($request->updates as $update) {
+            foreach ($request->updates as $update) {
                 $key = $update['key'];
-                if(isset($cart[$key])) {
+                if (isset($cart[$key])) {
                     $qty = (int)$update['quantity'];
-                    if($qty < 0) $qty = 0;  // Không cho âm
-                    if($qty == 0) unset($cart[$key]);  // Xóa nếu bằng 0
-                    else $cart[$key]['quantity'] = $qty;
+                    if ($qty < 0)
+                        $qty = 0; // Không cho âm
+                    if ($qty == 0)
+                        unset($cart[$key]); // Xóa nếu bằng 0
+                    else
+                        $cart[$key]['quantity'] = $qty;
                 }
             }
             session()->put('cart', $cart);
@@ -74,19 +78,21 @@ class CartController extends Controller
     {
         $cart = session()->get('cart', []);
         $quantities = $request->input('quantities', []);
-        
-        foreach($quantities as $id => $qty) {
+
+        foreach ($quantities as $id => $qty) {
             $qty = (int)$qty;
-            if($qty < 0) $qty = 0;  // Không cho âm
-            if($qty == 0) {
+            if ($qty < 0)
+                $qty = 0; // Không cho âm
+            if ($qty == 0) {
                 unset($cart[$id]);
-            } else {
-                if(isset($cart[$id])) {
+            }
+            else {
+                if (isset($cart[$id])) {
                     $cart[$id]['quantity'] = $qty;
                 }
             }
         }
-        
+
         session()->put('cart', $cart);
         return response()->json(['success' => true]);
     }
@@ -96,7 +102,7 @@ class CartController extends Controller
         $type = $request->order_type;
         $cart = session()->get('cart', []);
 
-        $itemsToConfirm = array_filter($cart, function($item) use ($type) {
+        $itemsToConfirm = array_filter($cart, function ($item) use ($type) {
             return ($item['order_type'] ?? '') === $type;
         });
 
@@ -106,7 +112,7 @@ class CartController extends Controller
 
         // Logic xử lý các trường dựa trên loại đơn hàng
         $isTakeaway = ($request->order_type === 'mang-ve');
-        
+
         // Kiểm tra trùng lịch nếu là đặt bàn
         if (!$isTakeaway) {
             $tables = session('tables_detail', []);
@@ -123,10 +129,10 @@ class CartController extends Controller
                     ->where('bills.is_paid', true)
                     ->where('bills.status', '!=', 'cancelled')
                     ->where('booking_tables.table_number', $t['number'])
-                    ->where(function($query) use ($startDateTime, $endDateTime) {
-                        $query->where('booking_tables.start_time', '<', $endDateTime)
-                              ->where('booking_tables.end_time', '>', $startDateTime);
-                    })
+                    ->where(function ($query) use ($startDateTime, $endDateTime) {
+                    $query->where('booking_tables.start_time', '<', $endDateTime)
+                        ->where('booking_tables.end_time', '>', $startDateTime);
+                })
                     ->exists();
 
                 if ($overlap) {
@@ -137,24 +143,24 @@ class CartController extends Controller
 
         try {
             DB::beginTransaction();
-            
-            $totalAmount = array_reduce($itemsToConfirm, function($carry, $item) {
+
+            $totalAmount = array_reduce($itemsToConfirm, function ($carry, $item) {
                 return $carry + ($item['price'] * $item['quantity']);
             }, 0);
 
             $billData = [
-                'customer_name'  => $request->customer_name ?? 'Khách hàng',
-                'order_type'     => $request->order_type,
-                'total_amount'   => $totalAmount,
-                'status'         => 'pending',
-                'is_paid'        => false,
+                'customer_name' => $request->customer_name ?? 'Khách hàng',
+                'order_type' => $request->order_type,
+                'total_amount' => $totalAmount,
+                'status' => 'pending',
+                'is_paid' => false,
                 'payment_method' => $request->payment_method,
-                'paid_at'        => null,
-                'address'        => $isTakeaway ? $request->address : null,
-                'table_number'   => $isTakeaway ? null : (session('table_numbers') ? implode(', ', collect(session('table_numbers'))->sort()->values()->all()) : null),
-                'booking_date'   => $isTakeaway ? null : session('start_date'),
-                'arrival_time'   => $isTakeaway ? null : session('start_time'),
-                'finish_time'    => $isTakeaway ? null : session('end_time'),
+                'paid_at' => null,
+                'address' => $isTakeaway ? $request->address : null,
+                'table_number' => $isTakeaway ? null : (session('table_numbers') ? implode(', ', collect(session('table_numbers'))->sort()->values()->all()) : null),
+                'booking_date' => $isTakeaway ? null : session('start_date'),
+                'arrival_time' => $isTakeaway ? null : session('start_time'),
+                'finish_time' => $isTakeaway ? null : session('end_time'),
             ];
 
             // TÌM BILL CŨ (Nếu có): Để giữ đúng mã hóa đơn cho khách khi rollback/sửa đơn
@@ -166,7 +172,8 @@ class CartController extends Controller
                 $bill->update($billData);
                 $bill->details()->delete();
                 $customBillCode = $bill->bill_code;
-            } else {
+            }
+            else {
                 // Tạo mới nếu chưa có hoặc đã thanh toán xong đơn trước
                 $today = now()->format('dmY');
                 $maxOrder = Bill::whereDate('created_at', Carbon::today())->max('order_in_day') ?? 0;
@@ -174,18 +181,18 @@ class CartController extends Controller
                 $customBillCode = str_pad($orderInDay, 3, '0', STR_PAD_LEFT) . $today;
 
                 $bill = Bill::create(array_merge($billData, [
-                    'bill_code'    => $customBillCode,
+                    'bill_code' => $customBillCode,
                     'order_in_day' => $orderInDay
                 ]));
             }
 
             foreach ($itemsToConfirm as $item) {
                 BillDetail::create([
-                    'bill_id'       => $bill->id,
-                    'dish_id'       => $item['dish_id'],
-                    'quantity'      => $item['quantity'],
+                    'bill_id' => $bill->id,
+                    'dish_id' => $item['dish_id'],
+                    'quantity' => $item['quantity'],
                     'price_at_time' => $item['price'],
-                    'note'          => $item['note'] ?? 'Không có',
+                    'note' => $item['note'] ?? 'Không có',
                 ]);
             }
 
@@ -194,10 +201,10 @@ class CartController extends Controller
                 $tables = session('tables_detail', []);
                 foreach ($tables as $t) {
                     \App\Models\BookingTable::create([
-                        'bill_id'      => $bill->id,
+                        'bill_id' => $bill->id,
                         'table_number' => $t['number'],
-                        'start_time'   => session('start_date') . ' ' . session('start_time') . ':00',
-                        'end_time'     => session('start_date') . ' ' . session('end_time') . ':00',
+                        'start_time' => session('start_date') . ' ' . session('start_time') . ':00',
+                        'end_time' => session('start_date') . ' ' . session('end_time') . ':00',
                     ]);
                 }
             }
@@ -205,14 +212,15 @@ class CartController extends Controller
             session()->put('last_confirmed_' . $type, true);
             session()->put('last_bill_code_' . $type, $customBillCode);
 
-            $newCart = array_filter($cart, function($item) use ($type) {
+            $newCart = array_filter($cart, function ($item) use ($type) {
                 return ($item['order_type'] ?? '') !== $type;
             });
             session()->put('cart', $newCart);
 
             DB::commit();
             return response()->json(['status' => 'success']);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
         }
@@ -221,18 +229,18 @@ class CartController extends Controller
     public function processPayment(Request $request)
     {
         try {
-            $type = (string) $request->order_type;
-            $billCode = (string) ($request->input('bill_code') ?: session()->get('last_bill_code_' . $type));
-            
+            $type = (string)$request->order_type;
+            $billCode = (string)($request->input('bill_code') ?: session()->get('last_bill_code_' . $type));
+
             if (!$billCode) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Không tìm thấy hóa đơn. Vui lòng xác nhận đơn hàng trước.'
                 ], 400);
             }
-            
+
             $bill = Bill::where('bill_code', $billCode)->first();
-            
+
             if (!$bill) {
                 return response()->json([
                     'status' => 'error',
@@ -250,10 +258,10 @@ class CartController extends Controller
                         ->where('bills.status', '!=', 'cancelled')
                         ->where('bills.id', '!=', $bill->id)
                         ->where('booking_tables.table_number', $t->table_number)
-                        ->where(function($query) use ($t) {
-                            $query->where('booking_tables.start_time', '<', $t->end_time)
-                                  ->where('booking_tables.end_time', '>', $t->start_time);
-                        })
+                        ->where(function ($query) use ($t) {
+                        $query->where('booking_tables.start_time', '<', $t->end_time)
+                            ->where('booking_tables.end_time', '>', $t->start_time);
+                    })
                         ->select('bills.bill_code')
                         ->first();
 
@@ -261,7 +269,7 @@ class CartController extends Controller
                         // ROLLBACK: Khôi phục lại giỏ hàng cho người dùng
                         $cart = session()->get('cart', []);
                         $billDetails = BillDetail::with('dish')->where('bill_id', $bill->id)->get();
-                        
+
                         foreach ($billDetails as $detail) {
                             $cartKey = $detail->dish_id . '_' . $bill->order_type;
                             $cart[$cartKey] = [
@@ -274,14 +282,14 @@ class CartController extends Controller
                                 "created_at" => now()->format('H:i d/m/Y')
                             ];
                         }
-                        
+
                         session()->put('cart', $cart);
                         session()->put('last_confirmed_' . $type, false);
-                        
+
                         $bill->update(['status' => 'cancelled']);
 
                         return response()->json([
-                            'status' => 'error', 
+                            'status' => 'error',
                             'message' => 'Rất tiếc, bàn ' . $t->table_number . ' vừa có người khác thanh toán trước trong khung giờ bạn chọn. Giỏ hàng của bạn đã được khôi phục!'
                         ], 422);
                     }
@@ -290,16 +298,25 @@ class CartController extends Controller
 
             // Cập nhật hóa đơn
             $bill->update([
-                'is_paid'        => true, 
-                'status'         => 'completed',
+                'is_paid' => true,
+                'status' => 'completed',
                 'payment_method' => $request->payment_method ?? 'Tiền mặt',
-                'paid_at'        => now(),
+                'paid_at' => now(),
             ]);
-            
+
             session(['paid_' . $type => true]);
-            
+
+            // Dọn dẹp session đặt bàn nếu là đơn tại bàn thành công
+            if ($bill->order_type === 'dat-ban') {
+                session()->forget([
+                    'table_numbers', 'tables_detail', 'start_date', 'start_time',
+                    'end_time', 'total_tables', 'types', 'table_number'
+                ]);
+            }
+
             return response()->json(['status' => 'success']);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             // if bill was already marked paid but an exception occurred later,
             // treat as success to avoid confusing the user
             if (isset($bill) && $bill->is_paid) {
@@ -315,48 +332,89 @@ class CartController extends Controller
         }
     }
 
-    public function bookingHistory()
+    public function transactionHistory(Request $request)
     {
-        $bills = Bill::with('details')->orderBy('created_at', 'desc')->get();
-        return view('booking_history', compact('bills'));
+        $q = $request->input('q');
+        $date = $request->input('date');
+        $sort = $request->input('sort', 'desc');
+        $is_paid = $request->input('is_paid');
+        $search_type = $request->input('search_type', 'bill_code');
+
+        $query = Bill::with(['details.dish', 'bookings']);
+
+        $minDate = now()->subMonths(3)->startOfDay();
+        $query->where('created_at', '>=', $minDate);
+
+        if ($search_type === 'bill_code' && $q) {
+            $query->where('bill_code', 'like', "%{$q}%");
+        }
+        elseif ($search_type === 'payment_status' && $request->filled('is_paid')) {
+            $query->where('is_paid', $is_paid == '1');
+        }
+
+        if ($date) {
+            $query->whereDate('created_at', $date);
+        }
+
+        $bills = $query->orderBy('created_at', $sort)->get();
+
+        return view('transaction_history', compact('bills', 'q', 'date', 'sort', 'minDate', 'is_paid', 'search_type'));
     }
 
     public function exportPDF(Request $request)
     {
         $type = $request->query('type');
-        $billCode = session()->get('last_bill_code_' . $type);
-        $bill = Bill::with(['details.dish'])->where('bill_code', $billCode)->first();
-        $tables = \App\Models\BookingTable::where('bill_id', $bill->id)->get();
-        if (!$bill) {
-            return "Không tìm thấy hóa đơn cho loại đơn này!";
+        $code = $request->query('code'); // Allow exporting by specific bill code
+
+        if ($code) {
+            $bill = Bill::with(['details.dish'])->where('bill_code', $code)->first();
+        }
+        else {
+            $billCode = session()->get('last_bill_code_' . $type);
+            $bill = Bill::with(['details.dish'])->where('bill_code', $billCode)->first();
         }
 
+        if (!$bill) {
+            return "Không tìm thấy hóa đơn!";
+        }
+
+        $tables = \App\Models\BookingTable::where('bill_id', $bill->id)->get();
+
         $pdf = Pdf::loadView('pdf.invoice', compact('bill', 'tables'));
-        
-        return $pdf->stream('hoa-don-'.$billCode.'.pdf');
+
+        return $pdf->stream('hoa-don-' . $bill->bill_code . '.pdf');
     }
 
-    public function saveAddress(Request $request) {
+    public function saveAddress(Request $request)
+    {
         session(['user_address' => $request->address]);
         return response()->json(['status' => 'success']);
     }
 
-    public function saveBooking(Request $request) {
+    public function saveBooking(Request $request)
+    {
         $tables = $request->tables; // array of {number, type}
+        if (!$tables || !is_array($tables)) {
+            return response()->json(['status' => 'error', 'message' => 'Dữ liệu bàn trống!'], 400);
+        }
+
         $tableNumbers = array_map(fn($t) => $t['number'], $tables);
 
         session([
             'table_numbers' => $tableNumbers,
             'tables_detail' => $tables,
-            'start_date'   => $request->start_date,
-            'start_time'   => $request->start_time,
-            'end_time'     => $request->end_time,
-            'table_number'  => $tableNumbers[0] // Backward compatibility
+            'start_date' => $request->start_date,
+            'start_time' => $request->start_time,
+            'end_time' => $request->end_time,
+            'table_number' => $tableNumbers[0] ?? null,
+            'total_tables' => $request->total_tables ?? count($tables),
+            'types' => $request->types // optional
         ]);
         return response()->json(['status' => 'success']);
     }
 
-    public function checkMultiOverlap(Request $request) {
+    public function checkMultiOverlap(Request $request)
+    {
         try {
             $date = $request->date;
             $startTime = $request->start_time;
@@ -386,14 +444,15 @@ class CartController extends Controller
                     $readableStart = \Carbon\Carbon::parse($overlap->start_time)->format('H:i');
                     $readableEnd = \Carbon\Carbon::parse($overlap->end_time)->format('H:i');
                     return response()->json([
-                        'status' => 'error', 
+                        'status' => 'error',
                         'message' => 'Bàn số ' . $num . ' đã có người đặt từ ' . $readableStart . ' đến ' . $readableEnd
                     ], 422);
                 }
             }
 
             return response()->json(['status' => 'success']);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Lỗi kiểm tra trùng lịch: ' . $e->getMessage()
