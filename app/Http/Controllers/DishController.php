@@ -14,11 +14,12 @@ class DishController extends Controller
         return view('menu', ['danhSachMon' => $dishes]);
     }
 
-    public function show($id) {
+    public function show($id)
+    {
         $dish = Dish::find($id);
 
         if (!$dish) {
-            abort(404); 
+            abort(404);
         }
 
         return view('dish-detail', ['mon' => $dish]);

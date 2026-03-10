@@ -29,7 +29,7 @@
     <div class="invoice-box">
         <div class="header">
             <div class="restaurant-name">HGH RESTAURANT</div>
-            <p>Địa chỉ: Trường CNTT&&TT - ĐHCT</p>
+            <p>Địa chỉ: Số 52, đường số 2, Khu CBGV DHCT, Phường An Khánh, Quận Ninh Kiều, TP.Cần Thơ</p>
             <p>Điện thoại: 0907106674</p>
         </div>
 
@@ -118,4 +118,4 @@
         </div>
     </div>
 </body>
-</html>
+</html>

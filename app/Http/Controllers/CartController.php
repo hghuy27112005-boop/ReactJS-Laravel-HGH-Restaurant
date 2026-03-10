@@ -16,7 +16,6 @@ class CartController extends Controller
         $id = $request->dish_id;
         $type = $request->order_type;
 
-        // CHẶN: Nếu đã xác nhận (checkout) mà chưa thanh toán xong
         if (session('last_confirmed_' . $type) && !session('paid_' . $type)) {
             return response()->json([
                 'status' => 'error',
@@ -110,10 +109,8 @@ class CartController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Giỏ hàng trống!'], 400);
         }
 
-        // Logic xử lý các trường dựa trên loại đơn hàng
         $isTakeaway = ($request->order_type === 'mang-ve');
 
-        // Kiểm tra trùng lịch nếu là đặt bàn
         if (!$isTakeaway) {
             $tables = session('tables_detail', []);
             $date = $request->start_date ?? session('start_date');
@@ -136,13 +133,15 @@ class CartController extends Controller
                     ->exists();
 
                 if ($overlap) {
-                    return response()->json(['status' => 'error', 'message' => 'Bàn số ' . $t['number'] . ' đã có người đặt trong khung giờ bạn chọn. Vui lòng chọn lại!'], 422);
+                    return response()->json(['status' => 'error', 'message' => 'Bàn số ' . $t['number'] . ' đã có người đặt trong khung giờ bạn chọn.'], 422);
                 }
             }
         }
 
         try {
             DB::beginTransaction();
+
+            $targetBookingDate = $isTakeaway ? now()->format('Y-m-d') : session('start_date');
 
             $totalAmount = array_reduce($itemsToConfirm, function ($carry, $item) {
                 return $carry + ($item['price'] * $item['quantity']);
@@ -158,27 +157,24 @@ class CartController extends Controller
                 'paid_at' => null,
                 'address' => $isTakeaway ? $request->address : null,
                 'table_number' => $isTakeaway ? null : (session('table_numbers') ? implode(', ', collect(session('table_numbers'))->sort()->values()->all()) : null),
-                'booking_date' => $isTakeaway ? null : session('start_date'),
+                'booking_date' => $targetBookingDate,
                 'arrival_time' => $isTakeaway ? null : session('start_time'),
                 'finish_time' => $isTakeaway ? null : session('end_time'),
             ];
 
-            // TÌM BILL CŨ (Nếu có): Để giữ đúng mã hóa đơn cho khách khi rollback/sửa đơn
             $oldBillCode = session('last_bill_code_' . $type);
             $bill = Bill::where('bill_code', $oldBillCode)->where('is_paid', false)->first();
 
             if ($bill) {
-                // Cập nhật bill hiện tại thay vì tạo mới
                 $bill->update($billData);
                 $bill->details()->delete();
                 $customBillCode = $bill->bill_code;
             }
             else {
-                // Tạo mới nếu chưa có hoặc đã thanh toán xong đơn trước
-                $today = now()->format('dmY');
-                $maxOrder = Bill::whereDate('created_at', Carbon::today())->max('order_in_day') ?? 0;
+                $dateSuffix = \Carbon\Carbon::parse($targetBookingDate)->format('dmY');
+                $maxOrder = Bill::where('booking_date', $targetBookingDate)->max('order_in_day') ?? 0;
                 $orderInDay = $maxOrder + 1;
-                $customBillCode = str_pad($orderInDay, 3, '0', STR_PAD_LEFT) . $today;
+                $customBillCode = str_pad($orderInDay, 3, '0', STR_PAD_LEFT) . $dateSuffix;
 
                 $bill = Bill::create(array_merge($billData, [
                     'bill_code' => $customBillCode,
@@ -196,7 +192,6 @@ class CartController extends Controller
                 ]);
             }
 
-            // Lưu thông tin chi tiết từng bàn vào booking_tables
             if (!$isTakeaway) {
                 $tables = session('tables_detail', []);
                 foreach ($tables as $t) {
@@ -343,7 +338,6 @@ class CartController extends Controller
         $query = Bill::with(['details.dish', 'bookings']);
 
         $minDate = now()->subMonths(3)->startOfDay();
-        $query->where('created_at', '>=', $minDate);
 
         if ($search_type === 'bill_code' && $q) {
             $query->where('bill_code', 'like', "%{$q}%");
@@ -353,10 +347,15 @@ class CartController extends Controller
         }
 
         if ($date) {
-            $query->whereDate('created_at', $date);
+            $query->whereDate('booking_date', $date);
+        }
+        else {
+            $query->whereDate('booking_date', '>=', $minDate);
         }
 
-        $bills = $query->orderBy('created_at', $sort)->get();
+        $bills = $query->orderBy('booking_date', $sort)
+            ->orderBy('created_at', $sort)
+            ->get();
 
         return view('transaction_history', compact('bills', 'q', 'date', 'sort', 'minDate', 'is_paid', 'search_type'));
     }

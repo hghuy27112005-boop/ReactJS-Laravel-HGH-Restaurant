@@ -64,7 +64,7 @@
     <footer class="main-footer">
         <div class="footer-left">
             <p>&copy; 2026 NHÀ HÀNG HGH. Mọi quyền được bảo lưu.</p>
-            <p>Địa chỉ: 52 đường 2 KDC CBGV DHCT TP.Cần Thơ</p>
+            <p>Địa chỉ: Số 52, đường số 2, Khu CBGV DHCT, Phường An Khánh, Quận Ninh Kiều, TP.Cần Thơ</p>
         </div>
         <div class="footer-right">
             <div class="social-links">
