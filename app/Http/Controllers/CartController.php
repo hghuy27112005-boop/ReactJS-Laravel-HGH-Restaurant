@@ -300,6 +300,14 @@ class CartController extends Controller
             
             return response()->json(['status' => 'success']);
         } catch (\Exception $e) {
+            // if bill was already marked paid but an exception occurred later,
+            // treat as success to avoid confusing the user
+            if (isset($bill) && $bill->is_paid) {
+                \Log::warning('processPayment encountered exception after bill update: ' . $e->getMessage());
+                return response()->json(['status' => 'success']);
+            }
+            // Otherwise log and return error
+            \Log::error('processPayment failed: ' . $e->getMessage());
             return response()->json([
                 'status' => 'error',
                 'message' => 'Lỗi xử lý thanh toán: ' . $e->getMessage()

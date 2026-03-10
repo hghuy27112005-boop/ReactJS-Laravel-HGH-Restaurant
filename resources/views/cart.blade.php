@@ -113,7 +113,7 @@
                     <td style="font-weight: bold;">{{ number_format($item['price'] * $item['quantity'], 0, ',', '.') }}đ</td>
                 </tr>
                 @empty
-                <tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">Trống.</td></tr>
+                <tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">Trống</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -162,7 +162,7 @@
                     <td style="font-weight: bold;">{{ number_format($item['price'] * $item['quantity'], 0, ',', '.') }}đ</td>
                 </tr>
                 @empty
-                <tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">Trống.</td></tr>
+                <tr><td colspan="5" style="text-align:center; padding:20px; color:#999;">Trống</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -449,6 +449,20 @@
     // Initialize time inputs from session
     document.addEventListener('DOMContentLoaded', function() {
         // Wizard will handle session restoration via initWizardSelection()
+    });
+
+    // utility to close any modal by id
+    function closeModal(id) {
+        const m = document.getElementById(id);
+        if (m) m.style.display = 'none';
+    }
+    // click outside modal to close
+    window.addEventListener('click', function(e) {
+        const target = e.target;
+        // Chỉ close nếu click trực tiếp vào modal backdrop, không phải con của nó
+        if (target && target.classList && target.classList.contains('modal')) {
+            target.style.display = 'none';
+        }
     });
 
     function openModal(id) {
