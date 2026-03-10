@@ -135,9 +135,9 @@
                 <button class="btn-action btn-confirm" onclick="handleConfirm(this, 'mang-ve')" {{ (session('user_address') && count($deliveryItems) > 0) ? '' : 'disabled' }}>Xác Nhận</button>
             @else
                 @if(session('paid_mang-ve'))
-                    <button id="btn-pay-mang-ve" class="btn-action" style="background: #777;" disabled>Đã thanh toán</button>
+                    <button id="btn-pay-mang-ve" type="button" class="btn-action" style="background: #777;" disabled>Đã thanh toán</button>
                 @else
-                    <button id="btn-pay-mang-ve" onclick="openPaymentModal('mang-ve')" class="btn-action" style="background: #27AE60;">Thanh Toán</button>
+                    <button id="btn-pay-mang-ve" type="button" onclick="openPaymentModal('mang-ve')" class="btn-action" style="background: #27AE60;">Thanh Toán</button>
                 @endif
                 <a href="{{ url('/export-pdf?type=mang-ve') }}" class="btn-action btn-pdf" target="_blank">Xuất PDF</a>
             @endif
@@ -186,9 +186,9 @@
                 <button class="btn-action btn-confirm" onclick="handleConfirm(this, 'dat-ban')" {{ (session('table_number') && count($dineInItems) > 0) ? '' : 'disabled' }}>Xác Nhận</button>
             @else
                 @if(session('paid_dat-ban'))
-                    <button id="btn-pay-dat-ban" class="btn-action" style="background: #777;" disabled>Đã thanh toán</button>
+                    <button id="btn-pay-dat-ban" type="button" class="btn-action" style="background: #777;" disabled>Đã thanh toán</button>
                 @else
-                    <button id="btn-pay-dat-ban" onclick="openPaymentModal('dat-ban')" class="btn-action" style="background: #27AE60;">Thanh Toán</button>
+                    <button id="btn-pay-dat-ban" type="button" onclick="openPaymentModal('dat-ban')" class="btn-action" style="background: #27AE60;">Thanh Toán</button>
                 @endif
                 <a href="{{ url('/export-pdf?type=dat-ban') }}" class="btn-action btn-pdf" target="_blank">Xuất PDF</a>
             @endif
@@ -434,10 +434,11 @@
 @endphp
 
 <script>
+    let currentPayType = 'mang-ve'; // Default
     const sessionVars = {
         token: "{{ csrf_token() }}",
-        billMangVe: "{{ session('last_bill_code_mang-ve') }}",
-        billDatBan: "{{ session('last_bill_code_dat-ban') }}",
+        billMangVe: @json(session('last_bill_code_mang-ve')),
+        billDatBan: @json(session('last_bill_code_dat-ban')),
         totalTables: {{ $totalTables }},
         types: @json($types),
         tableNumbers: @json(session('table_numbers')),
@@ -676,7 +677,7 @@
 
     async function checkMultipleTableOverlap() {
         const tableList = bookingData.selectedTables.join(',');
-        const res = await fetch("{{ url('/check-multi-overlap') }}", {
+        const res = await fetch("/check-multi-overlap", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token },
             body: JSON.stringify({
@@ -704,7 +705,7 @@
         // Update session with booking data
         const tableNumbersStr = bookingData.selectedTables.join(',');
         
-        await fetch("{{ url('/save-booking') }}", {
+        await fetch("/save-booking", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token },
             body: JSON.stringify({
@@ -727,7 +728,7 @@
             updates[input.dataset.id] = input.value;
         });
 
-        const res = await fetch("{{ url('/update-cart-quantities') }}", {
+        const res = await fetch("/update-cart-quantities", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token },
             body: JSON.stringify({ quantities: updates })
@@ -995,7 +996,7 @@
     }
 
     async function saveBooking() {
-        const res = await fetch("{{ url('/save-booking') }}", {
+        const res = await fetch("/save-booking", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token },
             body: JSON.stringify({ 
@@ -1016,7 +1017,7 @@
 
     async function saveAddress() {
         const addr = document.getElementById('address-input-modal').value;
-        await fetch("{{ url('/save-address') }}", {
+        await fetch("/save-address", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token },
             body: JSON.stringify({ address: addr })
@@ -1036,7 +1037,7 @@
             status: false
         };
         
-        const res = await fetch("{{ url('/checkout') }}", { 
+        const res = await fetch("/checkout", { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token }, 
             body: JSON.stringify(data) 
@@ -1051,10 +1052,15 @@
         }
     }
 
-    let currentPayType = '';
+
     function openPaymentModal(type) {
         currentPayType = type;
-        document.getElementById('pay-bill-code-display').innerText = (type === 'mang-ve') ? sessionVars.billMangVe : sessionVars.billDatBan;
+        const billCode = (type === 'mang-ve') ? sessionVars.billMangVe : sessionVars.billDatBan;
+        if (!billCode) {
+            alert("Bạn chưa có mã hóa đơn cho đơn này. Vui lòng bấm 'Xác Nhận' trước khi thanh toán.");
+            return;
+        }
+        document.getElementById('pay-bill-code-display').innerText = billCode;
         document.querySelectorAll('input[name="payment_method"]').forEach(radio => radio.checked = false);
         document.getElementById('paymentConfirmBtn').disabled = true;
         openModal('paymentModal');
@@ -1066,7 +1072,7 @@
     }
 
     function goToHistory() {
-        location.href = "{{ route('booking_history') }}";
+        location.href = "{{ route('transaction_history') }}";
     }
 
     async function confirmPayment() {
@@ -1076,6 +1082,7 @@
         
         if(!selectedMethod) return;
         const paymentMethod = selectedMethod.value;
+        const billCode = (document.getElementById('pay-bill-code-display')?.innerText || '').trim();
         
         // Khóa các nút và hiển thị trạng thái giả bộ đang xử lý
         btn.disabled = true;
@@ -1085,15 +1092,24 @@
         btn.innerText = "Đang xử lý...";
 
         try {
-            const res = await fetch("{{ url('/process-payment') }}", {
+            const res = await fetch("{{ route('process_payment') }}", {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token },
-                body: JSON.stringify({ order_type: currentPayType, payment_method: paymentMethod })
+                body: JSON.stringify({ order_type: currentPayType, payment_method: paymentMethod, bill_code: billCode })
             });
 
             if(!res.ok) {
-                const err = await res.json();
-                alert("Lỗi: " + (err.message || "Không thể xử lý thanh toán"));
+                let errMsg = "Không thể xử lý thanh toán";
+                try {
+                    const err = await res.json();
+                    errMsg = err.message || errMsg;
+                } catch (_) {
+                    try {
+                        const t = await res.text();
+                        if (t) errMsg = t;
+                    } catch (_) {}
+                }
+                alert("Lỗi: " + errMsg);
                 
                 // Nếu là lỗi trùng lịch (422), reload để hiện lại giỏ hàng đã khôi phục
                 if (res.status === 422) {
@@ -1105,7 +1121,7 @@
                 cancelBtn.disabled = false;
                 cancelBtn.style.opacity = '1';
                 cancelBtn.style.cursor = 'pointer';
-                btn.innerText = "Xác nhận Thanh toán";
+                btn.innerText = "Xác Nhận";
                 return;
             }
 
@@ -1122,13 +1138,48 @@
                 mainBtn.onclick = null;
             }
         } catch (e) {
-            console.error(e);
-            alert("Lỗi kết nối server!");
+            console.error("Payment Error:", e);
+            alert("Lỗi kết nối server hoặc lỗi JavaScript: " + e.message);
             btn.disabled = false;
             cancelBtn.disabled = false;
-            btn.innerText = "Xác nhận Thanh toán";
+            btn.innerText = "Xác Nhận";
         }
     }
+</script>
+
+<script>
+    // Fallback: đảm bảo nút "Thanh Toán" luôn mở được modal (kể cả khi script lớn phía trên bị lỗi).
+    (function() {
+        const billMangVe = @json(session('last_bill_code_mang-ve'));
+        const billDatBan = @json(session('last_bill_code_dat-ban'));
+
+        if (typeof window.openModal !== 'function') {
+            window.openModal = function(id) {
+                const el = document.getElementById(id);
+                if (el) el.style.display = 'block';
+            };
+        }
+
+        window.openPaymentModal = function(type) {
+            if (typeof window.currentPayType !== 'undefined') window.currentPayType = type;
+            try { currentPayType = type; } catch (_) {}
+            const billCode = (type === 'mang-ve') ? billMangVe : billDatBan;
+            const billEl = document.getElementById('pay-bill-code-display');
+            const confirmBtn = document.getElementById('paymentConfirmBtn');
+
+            if (!billEl || !confirmBtn) return;
+
+            if (!billCode) {
+                alert("Bạn chưa có mã hóa đơn cho đơn này. Vui lòng bấm 'Xác Nhận' trước khi thanh toán.");
+                return;
+            }
+
+            billEl.innerText = billCode;
+            document.querySelectorAll('input[name=\"payment_method\"]').forEach(r => (r.checked = false));
+            confirmBtn.disabled = true;
+            window.openModal('paymentModal');
+        };
+    })();
 </script>
 @endsection
 

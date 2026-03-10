@@ -221,8 +221,8 @@ class CartController extends Controller
     public function processPayment(Request $request)
     {
         try {
-            $type = $request->order_type;
-            $billCode = session()->get('last_bill_code_' . $type);
+            $type = (string) $request->order_type;
+            $billCode = (string) ($request->input('bill_code') ?: session()->get('last_bill_code_' . $type));
             
             if (!$billCode) {
                 return response()->json([
