@@ -3,7 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Support\Facades\DB;
 
-return new class extends Migration
+return new class extends Migration 
 {
     public function up(): void
     {
@@ -39,7 +39,7 @@ return new class extends Migration
                 limit 1
             ");
 
-            $dt = strtolower((string) ($col->data_type ?? ''));
+            $dt = strtolower((string)($col->data_type ?? ''));
             if (in_array($dt, ['tinyint', 'bit', 'boolean'], true)) {
                 DB::statement("alter table bills modify status varchar(50) not null default 'pending'");
                 DB::statement("update bills set status = if(status = 1, 'completed', 'pending')");
@@ -51,7 +51,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        // Không tự động rollback về boolean vì sẽ mất thông tin status string.
+    // Không tự động rollback về boolean vì sẽ mất thông tin status string.
     }
 };
-

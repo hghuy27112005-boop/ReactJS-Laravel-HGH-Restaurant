@@ -224,10 +224,16 @@
             <div id="register" class="tab-content">
                 <form id="registerForm" onsubmit="event.preventDefault(); handleRegister();">
                     <label for="regUsername">Tên người dùng (*):</label>
-                    <input type="text" id="regUsername" required placeholder="Nhập tên người dùng">
+                    <input type="text" id="regUsername" name="username" required placeholder="Nhập tên người dùng">
                     
+                    <label for="regEmail">Email:</label>
+                    <input type="email" id="regEmail" name="email" placeholder="ví dụ: a@gmail.com">
+
+                    <label for="regPhone">Số điện thoại:</label>
+                    <input type="text" id="regPhone" name="phone" placeholder="Nhập số điện thoại">
+
                     <label for="regPassword">Mật khẩu (*):</label>
-                    <input type="password" id="regPassword" required placeholder="Tối thiểu 6 ký tự">
+                    <input type="password" id="regPassword" name="password" required placeholder="Tối thiểu 6 ký tự">
 
                     <label for="regConfirmPassword">Xác nhận mật khẩu (*):</label>
                     <input type="password" id="regConfirmPassword" required placeholder="Nhập lại mật khẩu">

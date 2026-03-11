@@ -40,7 +40,7 @@ return new class extends Migration
             $table->decimal('total_amount', 10, 2)->default(0);
             $table->string('order_type', 50)->nullable();
             $table->text('address')->nullable();
-            $table->integer('table_number')->nullable();
+            $table->string('table_number', 255)->nullable(); // Changed to string as requested
             $table->date('booking_date')->nullable();
             $table->string('arrival_time', 50)->nullable();
             $table->string('finish_time', 50)->nullable();
@@ -77,11 +77,8 @@ return new class extends Migration
             $table->timestamp('created_at')->useCurrent();
 
             $table->foreign('bill_id')->references('id')->on('bills')->onDelete('set null');
-            
-            // Note: Check constraints might need raw SQL in some database drivers
-            // Laravel doesn't have a built-in fluent method for check constraints on table creation
         });
-        
+
         // Add check constraints via raw SQL
         DB::statement('ALTER TABLE booking_tables ADD CONSTRAINT check_table_number CHECK (table_number BETWEEN 1 AND 50)');
         DB::statement('ALTER TABLE booking_tables ADD CONSTRAINT check_times CHECK (end_time > start_time)');
