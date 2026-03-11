@@ -2,7 +2,6 @@
 
 @section('content')
 <style>
-    /* CSS cho Modal */
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
     .modal-content { background-color: white; margin: 10% auto; padding: 25px; border-radius: 15px; width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; }
     .close-btn { position: absolute; top: 10px; right: 20px; font-size: 28px; cursor: pointer; color: #aaa; }
@@ -15,11 +14,24 @@
     .confirm-btn { background: #C0392B; color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: 0.3s; font-weight: bold; }
     .confirm-btn:hover { background: #a93226; }
 
-    /* Hiệu ứng hover cho hình ảnh */
     .dish-card img { transition: 0.3s; cursor: pointer; width: 100%; height: 200px; object-fit: cover; border-radius: 10px; }
     .dish-card img:hover { opacity: 0.8; transform: scale(1.02); }
     .dish-card { border: 1px solid #eee; padding: 15px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.3s; }
     .dish-card:hover { box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+
+    .btn-add-action {
+        background: #C0392B; 
+        color: white; 
+        border: none; 
+        padding: 8px 15px; 
+        border-radius: 5px; 
+        cursor: pointer; 
+        font-weight: bold;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 14px;
+    }
+    .btn-add-action:hover { background: #a93226; }
 </style>
 
 <div style="padding: 50px; max-width: 1200px; margin: 0 auto;">
@@ -39,18 +51,25 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
                     <p style="color: #C0392B; font-weight: bold; font-size: 17px;">{{ number_format($mon->price, 0, ',', '.') }} VNĐ</p>
                     
-                    {{-- Truyền thêm giá (price) vào hàm openOrderModal --}}
-                    <button onclick="openOrderModal('{{ $mon->dish_id }}', '{{ $mon->dish_name }}', {{ $mon->price }})" 
-                            style="background: #C0392B; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-weight: bold;">
-                        + Thêm
-                    </button>
+                    @auth
+                        {{-- Đã đăng nhập: Mở modal đặt món --}}
+                        <button class="btn-add-action" onclick="openOrderModal('{{ $mon->dish_id }}', '{{ $mon->dish_name }}', {{ $mon->price }})">
+                            + Thêm
+                        </button>
+                    @else
+                        {{-- Chưa đăng nhập: Chuyển hướng sang trang đăng nhập --}}
+                        <a href="{{ route('login') }}" class="btn-add-action">
+                            + Thêm
+                        </a>
+                    @endauth
                 </div>
             </div>
         @endforeach
     </div>
 </div>
 
-{{-- MODAL --}}
+{{-- MODAL CHỈ HIỆN KHI ĐÃ ĐĂNG NHẬP (LƯU TRONG DOM) --}}
+@auth
 <div id="orderModal" class="modal">
     <div class="modal-content">
         <span class="close-btn" onclick="closeModal()">&times;</span>
@@ -83,9 +102,7 @@
     const qtyInput = document.getElementById("quantity");
     const CSRF_TOKEN = '{{ csrf_token() }}';
     
-    // Biến lưu trữ món đang chọn
     let currentDish = { id: '', name: '', price: 0 };
-    // Biến kiểm soát việc click chuột
     let isMouseDownInside = false;
 
     function openOrderModal(id, name, price) {
@@ -100,22 +117,17 @@
         modal.style.display = "none"; 
     }
 
-    // --- FIX LỖI KÉO CHUỘT RA NGOÀI BỊ THOÁT ---
     modal.addEventListener('mousedown', function(e) {
-        // Kiểm tra xem lúc nhấn chuột xuống có nằm trong phần nội dung trắng không
         isMouseDownInside = e.target.closest('.modal-content');
     });
 
     modal.addEventListener('mouseup', function(e) {
-        // Chỉ đóng nếu: nhấn chuột vào vùng xám VÀ thả chuột cũng ở vùng xám
         if (e.target == modal && !isMouseDownInside) {
             closeModal();
         }
         isMouseDownInside = false; 
     });
-    // ------------------------------------------
 
-    // Chặn nhập quá 10
     qtyInput.addEventListener("input", function() {
         if (this.value > 10) this.value = 10;
         if (this.value < 1 && this.value !== "") this.value = 1;
@@ -160,4 +172,5 @@
         });
     }
 </script>
+@endauth
 @endsection

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>NHÀ HÀNG HGH</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -15,7 +16,7 @@
     <style>
         body { margin: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
 
-        .main-header { display: flex; justify-content: space-between; align-items: center; background-color: #C0392B; padding: 15px 40px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+        .main-header { display: flex; justify-content: space-between; align-items: center; background-color: #C0392B; padding: 15px 40px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); position: sticky; top: 0; z-index: 1000; }
         .logo-section a { color: #fff; font-size: 26px; font-weight: 700; text-decoration: none; }
         .main-nav { display: flex; gap: 30px; }
         .main-nav a { text-decoration: none; color: #fff; font-size: 16px; padding: 5px 0; transition: border-bottom 0.3s ease; border-bottom: 2px solid transparent; }
@@ -44,21 +45,24 @@
         <nav class="main-nav">
             <a href="{{ url('/gioi-thieu') }}" class="{{ Request::is('gioi-thieu') ? 'active' : '' }}">Giới Thiệu</a>
             <a href="{{ url('/menu') }}" class="{{ Request::is('menu*') ? 'active' : '' }}">Menu</a> 
-            <a href="{{ route('transaction_history') }}" class="{{ Request::is('transaction-history') || Request::is('booking-history') ? 'active' : '' }}">Lịch sử giao dịch</a>
+            
+            @auth
+                <a href="{{ route('transaction_history') }}" class="{{ Request::is('transaction-history') ? 'active' : '' }}">Lịch sử giao dịch</a>
+            @endauth
         </nav>
 
         <div class="user-actions">
-            <a href="{{ url('/gio-hang') }}" class="action-btn">
-                <i class="fas fa-shopping-cart"></i> Giỏ Hàng
-            </a>
-
             @auth
+                <a href="{{ url('/gio-hang') }}" class="action-btn {{ Request::is('gio-hang') ? 'active-cart' : '' }}">
+                    <i class="fas fa-shopping-cart"></i> Giỏ Hàng
+                </a>
+
                 <a href="{{ route('profile') }}" class="avatar-circle" title="Trang cá nhân của {{ Auth::user()->username }}">
                     <i class="fas fa-user"></i>
                 </a>
             @else
-                <a href="{{ route('login_register') }}" class="action-btn">
-                    <i class="fas fa-user-circle"></i> Tài Khoản
+                <a href="{{ route('login') }}" class="action-btn">
+                    <i class="fas fa-user-circle"></i> Đăng nhập/Đăng ký
                 </a>
             @endauth
         </div>

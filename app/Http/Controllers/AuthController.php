@@ -107,6 +107,56 @@ class AuthController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
-        return redirect()->route('login_register');
+        return redirect()->route('login');
+    }
+
+    public function showForgotPassword()
+    {
+        return view('forgot_password');
+    }
+
+    public function verifyUser(Request $request)
+    {
+        $request->validate([
+            'username' => 'required',
+            'email' => 'required|email',
+            'phone' => 'required',
+        ]);
+
+        $user = User::where('username', $request->username)
+            ->where('email', $request->email)
+            ->where('phone', $request->phone)
+            ->first();
+
+        if ($user) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Thông tin xác thực chính xác. Vui lòng đặt lại mật khẩu.',
+                'user_id' => $user->user_id
+            ]);
+        }
+
+        return response()->json([
+            'success' => false,
+            'message' => 'Thông tin không khớp với hệ thống.'
+        ], 404);
+    }
+
+    public function resetPassword(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|exists:users,user_id',
+            'password' => 'required|min:6',
+        ]);
+
+        $user = User::findOrFail($request->user_id);
+        $user->update([
+            'password_hash' => $request->password,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Đổi mật khẩu thành công!'
+        ]);
     }
 }

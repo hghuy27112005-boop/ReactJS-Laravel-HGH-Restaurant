@@ -2,9 +2,8 @@
 
 @section('content')
 <style>
-    /* 1. LAYOUT TỔNG THỂ: Thu hẹp nội dung chính để tạo khoảng trắng bên ngoài */
     .detail-section { 
-        max-width: 900px; /* Ép nội dung nhỏ lại (trước là 1100px) */
+        max-width: 900px; 
         margin: 40px auto; 
         display: flex; 
         gap: 40px; 
@@ -19,12 +18,11 @@
         box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
         display: block; 
         object-fit: cover; 
-        height: 350px; /* Thu nhỏ chiều cao hình */
+        height: 350px; 
     }
 
     .detail-right { flex: 1.2; text-align: left; }
 
-    /* 2. CHI TIẾT CHỮ: Giảm size cho cân đối với khung nhỏ */
     .dish-title { 
         color: #C0392B; font-size: 28px; margin-top: 0; margin-bottom: 12px; 
         border-bottom: 3px solid #C0392B; display: inline-block; padding-bottom: 5px;
@@ -51,32 +49,30 @@
         flex: 1.5; background: #C0392B; color: white; border: none; 
         padding: 10px; border-radius: 8px; font-size: 15px; font-weight: bold; 
         cursor: pointer; transition: 0.3s; display: flex; align-items: center; 
-        justify-content: center; gap: 8px;
+        justify-content: center; gap: 8px; text-decoration: none;
     }
-    .btn-add:hover { background: #a93226; transform: translateY(-2px); }
+    .btn-add:hover { background: #a93226; transform: translateY(-2px); color: white; }
 
-    /* 3. PHÂN TRANG: Fix lỗi nhảy dòng, thu nhỏ các nút */
     .pagination-container { 
         display: flex; 
         justify-content: center; 
         gap: 8px; 
         margin: 30px 0 60px 0; 
-        flex-wrap: nowrap; /* Tuyệt đối không cho xuống dòng */
+        flex-wrap: nowrap; 
     }
     .page-number {
         display: flex; align-items: center; justify-content: center; 
-        width: 35px; height: 35px; /* Thu nhỏ nút từ 42px xuống 35px */
+        width: 35px; height: 35px; 
         text-decoration: none; background-color: #fff; color: #C0392B; 
         border: 1px solid #C0392B; border-radius: 6px; 
         font-weight: bold; font-size: 13px; transition: 0.3s;
     }
     .page-number:hover, .page-number.active { background-color: #C0392B; color: #fff; }
 
-    /* 4. MODAL: Thu gọn lại cho đẹp */
     .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
     .modal-content { 
         background-color: white; margin: 10% auto; padding: 20px; 
-        border-radius: 12px; width: 350px; /* Thu nhỏ modal ngang */
+        border-radius: 12px; width: 350px; 
         box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; 
     }
     .close-btn { position: absolute; top: 5px; right: 15px; font-size: 24px; cursor: pointer; color: #aaa; }
@@ -102,9 +98,16 @@
 
         <div class="button-group">
             <a href="{{ url('/menu') }}" class="btn-back"> &larr; Quay về</a>
-            <button class="btn-add" onclick="openOrderModal('{{ $mon->dish_id }}', '{{ $mon->dish_name }}', {{ $mon->price }})">
-                <i class="fas fa-cart-plus"></i> Thêm vào giỏ
-            </button>
+            
+            @auth
+                <button class="btn-add" onclick="openOrderModal('{{ $mon->dish_id }}', '{{ $mon->dish_name }}', {{ $mon->price }})">
+                    <i class="fas fa-cart-plus"></i> Thêm vào giỏ
+                </button>
+            @else
+                <a href="{{ route('login') }}" class="btn-add">
+                    <i class="fas fa-sign-in-alt"></i> Thêm vào giỏ
+                </a>
+            @endauth
         </div>
     </div>
 </div>
@@ -117,7 +120,7 @@
     @endfor
 </div>
 
-{{-- MODAL --}}
+@auth
 <div id="orderModal" class="modal">
     <div class="modal-content">
         <span class="close-btn" onclick="closeModal()">&times;</span>
@@ -197,4 +200,5 @@
         });
     }
 </script>
+@endauth
 @endsection

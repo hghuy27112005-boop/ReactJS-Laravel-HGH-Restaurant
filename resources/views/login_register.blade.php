@@ -194,7 +194,7 @@
                     <label for="loginPassword">Mật khẩu (*):</label>
                     <input type="password" id="loginPassword" required placeholder="Nhập mật khẩu">
 
-                    <button type="button" class="forgot-password" onclick="alert('Chuyển hướng đến trang Khôi phục mật khẩu')">
+                    <button type="button" class="forgot-password" onclick="location.href='{{ route('password.request') }}'">
                         Quên mật khẩu?
                     </button>
                     

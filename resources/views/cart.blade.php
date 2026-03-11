@@ -298,7 +298,7 @@
             <h3 style="color:#C0392B; margin-bottom:20px;">Bước 4: Thời gian</h3>
             
             <label>Ngày đến:</label>
-            <input type="date" id="wizard-date" class="modal-input" oninput="checkOverlapDebounced()" value="{{ session('start_date') ?? date('Y-m-d') }}">
+            <input type="date" id="wizard-date" class="modal-input" oninput="checkOverlapDebounced()" value="{{ session('start_date') ?? date('Y-m-d') }}" min="{{ date('Y-m-d') }}">
             
             <div style="margin-top:15px; display:flex; gap:20px;">
                 <div>
@@ -444,7 +444,8 @@
         tableNumbers: @json(session('table_numbers')),
         startDate: "{{ session('start_date') }}",
         startTime: "{{ session('start_time') }}",
-        endTime: "{{ session('end_time') }}"
+        endTime: "{{ session('end_time') }}",
+        today: "{{ date('Y-m-d') }}"
     };
 
     // Initialize time inputs from session
@@ -457,13 +458,23 @@
         const m = document.getElementById(id);
         if (m) m.style.display = 'none';
     }
-    // click outside modal to close
-    window.addEventListener('click', function(e) {
+    // Ngăn chặn việc kéo thả chuột ra ngoài gây đóng modal đột ngột
+    let isMouseDownInsideModalContent = false;
+
+    window.addEventListener('mousedown', function(e) {
+        // Kiểm tra xem vị trí nhấn chuột bắt đầu có nằm trong nội dung modal không
+        isMouseDownInsideModalContent = e.target.closest('.modal-content');
+    });
+
+    window.addEventListener('mouseup', function(e) {
         const target = e.target;
-        // Chỉ close nếu click trực tiếp vào modal backdrop, không phải con của nó
-        if (target && target.classList && target.classList.contains('modal')) {
+        // Chỉ đóng nếu:
+        // 1. Chuột nhả ra đúng vào phần nền của modal (backdrop)
+        // 2. Chuột nhấn vào ban đầu KHÔNG phải từ trong nội dung modal
+        if (target && target.classList && target.classList.contains('modal') && !isMouseDownInsideModalContent) {
             target.style.display = 'none';
         }
+        isMouseDownInsideModalContent = false; 
     });
 
     function openModal(id) {
@@ -923,6 +934,12 @@
 
         if(!date || !sh || !eh) {
             document.getElementById('overlap-warning').innerText = "";
+            document.getElementById('btnNextStep4').disabled = true;
+            return;
+        }
+
+        if (date < sessionVars.today) {
+            document.getElementById('overlap-warning').innerHTML = `<i class="fas fa-exclamation-triangle"></i> Bạn không thể chọn ngày trong quá khứ!`;
             document.getElementById('btnNextStep4').disabled = true;
             return;
         }

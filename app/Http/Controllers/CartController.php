@@ -11,6 +11,12 @@ use Carbon\Carbon;
 
 class CartController extends Controller
 {
+    public function index()
+    {
+        $cart = session()->get('cart', []);
+        return view('cart', compact('cart'));
+    }
+
     public function addToCart(Request $request)
     {
         $id = $request->dish_id;
