@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\DishController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\AuthController;
 
 Route::get('/', function () {
     $highlights = DB::table('dishes')->where('is_bestseller', true)->get();
@@ -39,6 +40,16 @@ Route::get('/clear', function () {
 Route::get('/export-pdf', [CartController::class , 'exportPDF']);
 
 Route::post('/checkout', [CartController::class , 'checkout']);
+
 Route::get('/login-register', function () {
     return view('login_register');
 })->name('login_register');
+
+Route::post('/api/register', [AuthController::class , 'storeRegister'])->name('register.submit');
+Route::post('/api/login', [AuthController::class , 'login'])->name('login.submit');
+
+Route::middleware(['auth'])->group(function () {
+    Route::get('/profile', [AuthController::class , 'profile'])->name('profile');
+    Route::post('/api/profile/update', [AuthController::class , 'updateProfile'])->name('profile.update');
+    Route::post('/logout', [AuthController::class , 'logout'])->name('logout');
+});

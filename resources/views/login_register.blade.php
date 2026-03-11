@@ -224,13 +224,13 @@
             <div id="register" class="tab-content">
                 <form id="registerForm" onsubmit="event.preventDefault(); handleRegister();">
                     <label for="regUsername">Tên người dùng (*):</label>
-                    <input type="text" id="regUsername" name="username" required placeholder="Nhập tên người dùng">
+                    <input type="text" id="regUsername" name="username" required maxlength="20" placeholder="Nhập tên người dùng (tối đa 20 ký tự)">
                     
                     <label for="regEmail">Email:</label>
-                    <input type="email" id="regEmail" name="email" placeholder="ví dụ: a@gmail.com">
+                    <input type="email" id="regEmail" name="email" maxlength="50" placeholder="ví dụ: a@gmail.com (tối đa 50 ký tự)">
 
                     <label for="regPhone">Số điện thoại:</label>
-                    <input type="text" id="regPhone" name="phone" placeholder="Nhập số điện thoại">
+                    <input type="text" id="regPhone" name="phone" maxlength="10" placeholder="Nhập số điện thoại (10 số)">
 
                     <label for="regPassword">Mật khẩu (*):</label>
                     <input type="password" id="regPassword" name="password" required placeholder="Tối thiểu 6 ký tự">
@@ -278,22 +278,82 @@
             });
         }
         
-        function handleLogin() {
-            alert('Đăng nhập thành công! Chào mừng trở lại!');
-            window.location.href = "{{ url('/') }}"; 
+        async function handleLogin() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch("{{ route('login.submit') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(result.message);
+                    window.location.href = "{{ url('/') }}"; 
+                } else {
+                    alert(result.message || 'Tên đăng nhập hoặc mật khẩu không đúng!');
+                }
+            } catch (error) {
+                console.error('Lỗi kết nối:', error);
+                alert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!');
+            }
         }
         
-        function handleRegister() {
+        async function handleRegister() {
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const phone = document.getElementById('regPhone').value;
             const pass = document.getElementById('regPassword').value;
             const confirmPass = document.getElementById('regConfirmPassword').value;
-            
+
             if (pass !== confirmPass) {
                 alert('Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại!');
                 return;
             }
-            
-            alert('Đăng ký thành công! Chuyển hướng về trang chủ...');
-            window.location.href = "{{ url('/') }}"; 
+
+            try {
+                const response = await fetch("{{ route('register.submit') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        email: email,
+                        phone: phone,
+                        password: pass
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert('Đăng ký thành công! Chuyển hướng về trang chủ...');
+                    window.location.href = "{{ url('/') }}";
+                } else {
+                    let errorMsg = result.message || 'Đăng ký thất bại';
+                    if (result.errors) {
+                        errorMsg += ": " + Object.values(result.errors).flat().join(', ');
+                    }
+                    alert(errorMsg);
+                }
+            } catch (error) {
+                console.error('Lỗi kết nối:', error);
+                alert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!');
+            }
         }
         
         function handleSocialLogin(provider) {

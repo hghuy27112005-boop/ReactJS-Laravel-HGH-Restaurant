@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration
+return new class extends Migration 
 {
     /**
      * Run the migrations.
@@ -12,12 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->id('user_id'); // Match original PK naming if preferred, but Laravel usually uses id
-            $table->string('username')->unique();
-            $table->string('email')->unique()->nullable();
-            $table->string('phone', 15)->nullable();
-            $table->string('password_hash'); // Renamed to match SQL
-            $table->string('role')->default('user');
+            $table->id('user_id');
+            $table->string('username', 20); // VARCHAR(20)
+            $table->string('email', 50)->unique()->nullable(); // VARCHAR(50)
+            $table->string('phone', 10)->nullable(); // VARCHAR(10)
+            $table->string('password_hash'); // Mặc định là 255
+            $table->string('role', 10)->default('user'); // VARCHAR(10)
             $table->rememberToken();
             $table->timestamps();
         });
@@ -25,7 +25,7 @@ return new class extends Migration
         Schema::create('password_reset_tokens', function (Blueprint $table) {
             $table->string('email')->primary();
             $table->string('token');
-            $table->timestamp('created_at')->nullable();
+            $table->timestamp('created_at')->useCurrent();
         });
 
         Schema::create('sessions', function (Blueprint $table) {
