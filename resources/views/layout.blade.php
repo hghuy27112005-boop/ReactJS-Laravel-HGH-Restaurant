@@ -50,10 +50,11 @@
             <a href="{{ url('/gio-hang') }}" class="action-btn">
                 <i class="fas fa-shopping-cart"></i> Giỏ Hàng
             </a>
-            <button class="action-btn">
+            <a href="{{ route('login_register') }}" class="action-btn">
                 <i class="fas fa-user-circle"></i> Tài Khoản
-            </button>
+            </a>
         </div>
+
     </header>
 
     <main>

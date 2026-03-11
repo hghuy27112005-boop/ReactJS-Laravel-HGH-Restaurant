@@ -39,3 +39,6 @@ Route::get('/clear', function () {
 Route::get('/export-pdf', [CartController::class , 'exportPDF']);
 
 Route::post('/checkout', [CartController::class , 'checkout']);
+Route::get('/login-register', function () {
+    return view('login_register');
+})->name('login_register');
