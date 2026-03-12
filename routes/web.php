@@ -47,6 +47,15 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/transaction-history', [CartController::class , 'transactionHistory'])->name('transaction_history');
     Route::get('/export-pdf', [CartController::class , 'exportPDF']);
+
+    // Admin routes
+    Route::get('/admin/menu-management', function () {
+        return view('menu_management');
+    })->name('admin.menu_management');
+
+    Route::get('/admin/transaction-management', function () {
+        return view('transaction_management');
+    })->name('admin.transaction_management');
 });
 
 Route::get('/clear', function () {

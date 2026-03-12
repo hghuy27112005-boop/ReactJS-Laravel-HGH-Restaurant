@@ -24,7 +24,8 @@ class AuthController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Đăng nhập thành công'
+                'message' => 'Đăng nhập thành công',
+                'role' => Auth::user()->role
             ]);
         }
 

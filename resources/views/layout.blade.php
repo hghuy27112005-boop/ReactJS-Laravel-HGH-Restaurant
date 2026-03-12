@@ -43,19 +43,28 @@
         </div>
         
         <nav class="main-nav">
-            <a href="{{ url('/gioi-thieu') }}" class="{{ Request::is('gioi-thieu') ? 'active' : '' }}">Giới Thiệu</a>
-            <a href="{{ url('/menu') }}" class="{{ Request::is('menu*') ? 'active' : '' }}">Menu</a> 
-            
             @auth
-                <a href="{{ route('transaction_history') }}" class="{{ Request::is('transaction-history') ? 'active' : '' }}">Lịch sử giao dịch</a>
+                @if(Auth::user()->role === 'admin')
+                    <a href="{{ route('admin.menu_management') }}" class="{{ Request::is('admin/menu-management') ? 'active' : '' }}">Quản lý thực đơn</a>
+                    <a href="{{ route('admin.transaction_management') }}" class="{{ Request::is('admin/transaction-management') ? 'active' : '' }}">Quản lý giao dịch</a>
+                @else
+                    <a href="{{ url('/gioi-thieu') }}" class="{{ Request::is('gioi-thieu') ? 'active' : '' }}">Giới Thiệu</a>
+                    <a href="{{ url('/menu') }}" class="{{ Request::is('menu*') ? 'active' : '' }}">Menu</a> 
+                    <a href="{{ route('transaction_history') }}" class="{{ Request::is('transaction-history') ? 'active' : '' }}">Lịch sử giao dịch</a>
+                @endif
+            @else
+                <a href="{{ url('/gioi-thieu') }}" class="{{ Request::is('gioi-thieu') ? 'active' : '' }}">Giới Thiệu</a>
+                <a href="{{ url('/menu') }}" class="{{ Request::is('menu*') ? 'active' : '' }}">Menu</a> 
             @endauth
         </nav>
 
         <div class="user-actions">
             @auth
-                <a href="{{ url('/gio-hang') }}" class="action-btn {{ Request::is('gio-hang') ? 'active-cart' : '' }}">
-                    <i class="fas fa-shopping-cart"></i> Giỏ Hàng
-                </a>
+                @if(Auth::user()->role !== 'admin')
+                    <a href="{{ url('/gio-hang') }}" class="action-btn {{ Request::is('gio-hang') ? 'active-cart' : '' }}">
+                        <i class="fas fa-shopping-cart"></i> Giỏ Hàng
+                    </a>
+                @endif
 
                 <a href="{{ route('profile') }}" class="avatar-circle" title="Trang cá nhân của {{ Auth::user()->username }}">
                     <i class="fas fa-user"></i>

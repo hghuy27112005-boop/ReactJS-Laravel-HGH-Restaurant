@@ -297,7 +297,11 @@
 
                 if (response.ok && result.success) {
                     alert(result.message);
-                    window.location.href = "{{ url('/') }}"; 
+                    if (result.role === 'admin') {
+                        window.location.href = "{{ route('admin.menu_management') }}";
+                    } else {
+                        window.location.href = "{{ url('/') }}";
+                    }
                 } else {
                     alert(result.message || 'Tên đăng nhập hoặc mật khẩu không đúng!');
                 }
