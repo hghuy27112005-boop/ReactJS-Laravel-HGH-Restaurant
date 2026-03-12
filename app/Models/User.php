@@ -39,4 +39,9 @@ class User extends Authenticatable
             'password_hash' => 'hashed',
         ];
     }
+
+    public function bills()
+    {
+        return $this->hasMany(Bill::class, 'user_id', 'user_id');
+    }
 }

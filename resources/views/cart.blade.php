@@ -1050,7 +1050,7 @@
     async function handleConfirm(btn, type) {
         if(!confirm("Chốt đơn?")) return;
         btn.disabled = true;
-        btn.innerText = "Đang xử lý...";
+        btn.innerText = "Chờ thanh toán...";
         
         const data = {
             order_type: type,
@@ -1111,7 +1111,7 @@
         cancelBtn.disabled = true;
         cancelBtn.style.opacity = '0.5';
         cancelBtn.style.cursor = 'not-allowed';
-        btn.innerText = "Đang xử lý...";
+        btn.innerText = "Chờ thanh toán...";
 
         try {
             const res = await fetch("{{ route('process_payment') }}", {

@@ -107,7 +107,7 @@
             @php
                 $status = $bill->status;
                 $pillClass = 'pending';
-                $pillText = 'Đang xử lý';
+                $pillText = 'Chờ thanh toán';
 
                 if ($status === 'cancelled') { 
                     $pillClass = 'cancelled'; $pillText = 'Đã hủy'; 
@@ -149,6 +149,11 @@
                     </div>
 
                     <div class="actions">
+                        @if($status === 'pending')
+                            <a href="{{ url('/gio-hang') }}" class="btn primary" style="text-decoration: none; background: #27AE60; border-color: #27AE60;">
+                                <i class="fas fa-credit-card"></i> Thanh toán ngay
+                            </a>
+                        @endif
                         <span class="pill {{ $pillClass }}">{{ $pillText }}</span>
                         <a href="{{ url('/export-pdf?code=' . $bill->bill_code) }}" target="_blank" class="btn primary" style="text-decoration: none;">
                             <i class="fas fa-file-pdf"></i> Xuất PDF

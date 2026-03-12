@@ -72,6 +72,18 @@
         @yield('content')
     </main>
 
+    @if(session('success'))
+        <script>
+            alert("{{ session('success') }}");
+        </script>
+    @endif
+
+    @if(session('error'))
+        <script>
+            alert("{{ session('error') }}");
+        </script>
+    @endif
+
     @if(!Request::is('menu/*'))
     <footer class="main-footer">
         <div class="footer-left">

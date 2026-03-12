@@ -36,11 +36,12 @@ return new class extends Migration
             $table->id();
             $table->string('bill_code', 20)->unique()->nullable();
             $table->integer('order_in_day')->nullable();
+            $table->unsignedBigInteger('user_id')->nullable(); // LƯU NGƯỜI ĐẶT
             $table->string('customer_name', 255)->default('Khách hàng');
             $table->decimal('total_amount', 10, 2)->default(0);
             $table->string('order_type', 50)->nullable();
             $table->text('address')->nullable();
-            $table->string('table_number', 255)->nullable(); // Changed to string as requested
+            $table->string('table_number', 255)->nullable(); 
             $table->date('booking_date')->nullable();
             $table->string('arrival_time', 50)->nullable();
             $table->string('finish_time', 50)->nullable();
@@ -49,6 +50,8 @@ return new class extends Migration
             $table->string('payment_method', 100)->nullable();
             $table->timestamp('paid_at')->nullable();
             $table->timestamp('created_at')->useCurrent();
+
+            $table->foreign('user_id')->references('user_id')->on('users')->onDelete('set null');
         });
 
         // 4. bill_details

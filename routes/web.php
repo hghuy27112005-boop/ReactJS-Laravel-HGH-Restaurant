@@ -24,9 +24,9 @@ Route::get('/login-register', function () {
 
 Route::post('/api/register', [AuthController::class , 'storeRegister'])->name('register.submit');
 Route::post('/api/login', [AuthController::class , 'login'])->name('login.submit');
-Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
-Route::post('/api/forgot-password/verify', [AuthController::class, 'verifyUser'])->name('password.verify');
-Route::post('/api/forgot-password/reset', [AuthController::class, 'resetPassword'])->name('password.update');
+Route::get('/forgot-password', [AuthController::class , 'showForgotPassword'])->name('password.request');
+Route::post('/api/forgot-password/verify', [AuthController::class , 'verifyUser'])->name('password.verify');
+Route::post('/api/forgot-password/reset', [AuthController::class , 'resetPassword'])->name('password.update');
 
 
 Route::middleware(['auth'])->group(function () {
@@ -53,3 +53,6 @@ Route::get('/clear', function () {
     session()->flush();
     return "Đã dọn dẹp toàn bộ dữ liệu! Hãy quay lại Menu.";
 });
+
+Route::get('/auth/google', [AuthController::class , 'redirectToGoogle']);
+Route::get('/auth/google/callback', [AuthController::class , 'handleGoogleCallback']);

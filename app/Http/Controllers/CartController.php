@@ -13,6 +13,56 @@ class CartController extends Controller
 {
     public function index()
     {
+        $userId = auth()->id();
+
+        // CỨU HỘ ĐƠN HÀNG KẸT: Tìm đơn hàng chưa thanh toán để nạp lại session
+        $pendingBills = Bill::where('user_id', $userId)
+            ->where('is_paid', false)
+            ->where('status', 'pending')
+            ->get();
+
+        foreach ($pendingBills as $bill) {
+            $type = $bill->order_type;
+
+            // Nếu session bị mất (do login/logout) thì phục hồi từ DB
+            if (!session("last_confirmed_{$type}")) {
+                session(["last_confirmed_{$type}" => true]);
+                session(["last_bill_code_{$type}" => $bill->bill_code]);
+
+                // Nạp món ăn vào giỏ nếu giỏ đang trống loại đơn này
+                $cart = session()->get('cart', []);
+                $hasItems = false;
+                foreach ($cart as $item) {
+                    if (($item['order_type'] ?? '') === $type) {
+                        $hasItems = true;
+                        break;
+                    }
+                }
+
+                if (!$hasItems) {
+                    $details = $bill->details()->with('dish')->get();
+                    foreach ($details as $d) {
+                        $cartKey = $d->dish_id . '_' . $type;
+                        $cart[$cartKey] = [
+                            "dish_id" => $d->dish_id,
+                            "name" => $d->dish->dish_name,
+                            "quantity" => $d->quantity,
+                            "price" => $d->price_at_time,
+                            "order_type" => $type,
+                            "note" => $d->note,
+                            "created_at" => $bill->created_at->format('H:i d/m/Y')
+                        ];
+                    }
+                    session()->put('cart', $cart);
+                }
+
+                // Phục hồi địa chỉ/thông tin bàn
+                if ($type === 'mang-ve' && $bill->address) {
+                    session(['user_address' => $bill->address]);
+                }
+            }
+        }
+
         $cart = session()->get('cart', []);
         return view('cart', compact('cart'));
     }
@@ -155,6 +205,7 @@ class CartController extends Controller
 
             $billData = [
                 'customer_name' => $request->customer_name ?? 'Khách hàng',
+                'user_id' => auth()->id(), // LƯU ID NGƯỜI DÙNG ĐANG ĐĂNG NHẬP
                 'order_type' => $request->order_type,
                 'total_amount' => $totalAmount,
                 'status' => 'pending',
@@ -174,6 +225,7 @@ class CartController extends Controller
             if ($bill) {
                 $bill->update($billData);
                 $bill->details()->delete();
+                $bill->bookings()->delete(); // DỌN DẸP BÀN CŨ TRƯỚC KHI LƯU BÀN MỚI
                 $customBillCode = $bill->bill_code;
             }
             else {
@@ -342,6 +394,9 @@ class CartController extends Controller
         $search_type = $request->input('search_type', 'bill_code');
 
         $query = Bill::with(['details.dish', 'bookings']);
+
+        // CHỈ LẤY ĐƠN HÀNG CỦA USER ĐANG ĐĂNG NHẬP
+        $query->where('user_id', auth()->id());
 
         $minDate = now()->subMonths(3)->startOfDay();
 

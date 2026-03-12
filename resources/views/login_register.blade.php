@@ -212,11 +212,8 @@
                 </div>
 
                 <div class="social-login-buttons">
-                    <button class="social-btn facebook" onclick="handleSocialLogin('Facebook')">
-                        <i class="fab fa-facebook-f"></i> Facebook
-                    </button>
-                    <button class="social-btn google" onclick="handleSocialLogin('Google')">
-                        <i class="fab fa-google"></i> Google
+                    <button class="social-btn google" onclick="location.href='/auth/google'">
+                        <i class="fab fa-google"></i> Đăng nhập bằng Google
                     </button>
                 </div>
             </div>
@@ -356,8 +353,6 @@
             }
         }
         
-        function handleSocialLogin(provider) {
-            alert(`Đang tiến hành Đăng nhập bằng ${provider}...`);
-        }
+
     </script>
 @endsection

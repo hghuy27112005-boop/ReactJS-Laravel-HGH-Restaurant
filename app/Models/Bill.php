@@ -11,14 +11,9 @@ class Bill extends Model
     const UPDATED_AT = null;
 
     protected $fillable = [
-        'bill_code', 
-        'order_in_day', 
-        'customer_name', 
-        'total_amount', 
-        'order_type', 
-        'address', 
         'bill_code',
         'order_in_day',
+        'user_id',
         'customer_name',
         'total_amount',
         'order_type',
@@ -42,5 +37,10 @@ class Bill extends Model
     public function bookings()
     {
         return $this->hasMany(BookingTable::class, 'bill_id', 'id');
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 }

@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Laravel\Socialite\Facades\Socialite;
+use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
@@ -158,5 +160,58 @@ class AuthController extends Controller
             'success' => true,
             'message' => 'Đổi mật khẩu thành công!'
         ]);
+    }
+
+    public function redirectToGoogle()
+    {
+        return Socialite::driver('google')->redirect();
+    }
+
+    public function handleGoogleCallback()
+    {
+        try {
+            $googleUser = Socialite::driver('google')
+                ->setHttpClient(new \GuzzleHttp\Client(['verify' => false]))
+                ->user();
+        }
+        catch (\Exception $e) {
+            return redirect()->route('login')->with('error', 'Lỗi: ' . $e->getMessage());
+        }
+
+        // Tìm user theo email
+        $user = User::where('email', $googleUser->email)->first();
+
+        if ($user) {
+            // Đã có account, log in luôn
+            Auth::login($user);
+        }
+        else {
+            // Chưa có account, tạo mới
+            // Username: lấy từ email (phần trước @) và giới hạn 20 ký tự
+            $username = explode('@', $googleUser->email)[0];
+            $username = substr($username, 0, 20);
+
+            // Kiểm tra xem username có bị trùng không
+            $originalUsername = $username;
+            $count = 1;
+            while (User::where('username', $username)->exists()) {
+                $suffix = '_' . $count;
+                // Đảm bảo tổng độ dài không quá 20
+                $username = substr($originalUsername, 0, 20 - strlen($suffix)) . $suffix;
+                $count++;
+            }
+
+            $user = User::create([
+                'username' => $username,
+                'email' => $googleUser->email,
+                'password_hash' => Hash::make(str()->random(16)), // Tạo pass ngẫu nhiên vì login qua Google
+                'role' => 'user',
+            ]);
+
+            Auth::login($user);
+        }
+
+        // Thông báo thành công và chuyển về trang chủ
+        return redirect('/')->with('success', 'Đăng nhập Gmail thành công!');
     }
 }
