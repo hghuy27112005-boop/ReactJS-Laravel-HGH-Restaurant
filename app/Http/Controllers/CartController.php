@@ -421,6 +421,52 @@ class CartController extends Controller
         return view('transaction_history', compact('bills', 'q', 'date', 'sort', 'minDate', 'is_paid', 'search_type'));
     }
 
+    public function transactionManagement(Request $request)
+    {
+        $q = $request->input('q');
+        $date = $request->input('date');
+        $sort = $request->input('sort', 'desc');
+        $is_paid = $request->input('is_paid');
+        $search_type = $request->input('search_type', 'bill_code');
+        
+        $order_type = $request->input('order_type');
+        $username = $request->input('username');
+
+        $query = Bill::with(['details.dish', 'bookings', 'user']);
+
+        // Admin sees all
+        $minDate = now()->subMonths(3)->startOfDay();
+
+        // One main filter at a time (besides date)
+        if ($search_type === 'bill_code' && $q) {
+            $query->where('bill_code', 'like', "%{$q}%");
+        }
+        elseif ($search_type === 'payment_status' && $request->filled('is_paid')) {
+            $query->where('is_paid', $is_paid == '1');
+        }
+        elseif ($search_type === 'order_type' && $order_type) {
+            $query->where('order_type', $order_type);
+        }
+        elseif ($search_type === 'username' && $username) {
+            $query->whereHas('user', function($u) use ($username) {
+                $u->where('username', 'like', "%{$username}%");
+            });
+        }
+
+        if ($date) {
+            $query->whereDate('booking_date', $date);
+        }
+        else {
+            $query->whereDate('booking_date', '>=', $minDate);
+        }
+
+        $bills = $query->orderBy('booking_date', $sort)
+            ->orderBy('created_at', $sort)
+            ->get();
+
+        return view('transaction_management', compact('bills', 'q', 'date', 'sort', 'minDate', 'is_paid', 'search_type', 'order_type', 'username'));
+    }
+
     public function exportPDF(Request $request)
     {
         $type = $request->query('type');

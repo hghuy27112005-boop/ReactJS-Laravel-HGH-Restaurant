@@ -53,9 +53,7 @@ Route::middleware(['auth'])->group(function () {
         return view('menu_management');
     })->name('admin.menu_management');
 
-    Route::get('/admin/transaction-management', function () {
-        return view('transaction_management');
-    })->name('admin.transaction_management');
+    Route::get('/admin/transaction-management', [CartController::class, 'transactionManagement'])->name('admin.transaction_management');
 });
 
 Route::get('/clear', function () {
