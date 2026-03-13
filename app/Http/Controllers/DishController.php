@@ -24,4 +24,10 @@ class DishController extends Controller
 
         return view('dish-detail', ['mon' => $dish]);
     }
+
+    public function menuManagement()
+    {
+        $dishes = Dish::orderBy('dish_id', 'asc')->get();
+        return view('menu_management', compact('dishes'));
+    }
 }

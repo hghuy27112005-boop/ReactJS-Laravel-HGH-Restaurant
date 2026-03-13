@@ -64,8 +64,7 @@ class AuthController extends Controller
                 'success' => true,
                 'message' => 'Đăng ký thành công!'
             ]);
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi: ' . $e->getMessage()
@@ -92,17 +91,40 @@ class AuthController extends Controller
                 'regex:/^[a-zA-Z0-9._%+-]+@gmail\.com$/'
             ],
             'phone' => 'nullable|max:10',
+            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // Tối đa 5MB
         ], [
             'email.regex' => 'Chỉ chấp nhận địa chỉ Gmail (@gmail.com)'
         ]);
 
-        $user->update([
+        $updateData = [
             'username' => $request->username,
             'email' => $request->email,
             'phone' => $request->phone,
-        ]);
+        ];
 
-        return response()->json(['success' => true, 'message' => 'Cập nhật thông tin thành công!']);
+        if ($request->hasFile('avatar')) {
+            $file = $request->file('avatar');
+            $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
+
+            // Đường dẫn lưu file theo user_id
+            $destinationPath = public_path('avatars/' . $user->user_id);
+            if (!file_exists($destinationPath)) {
+                mkdir($destinationPath, 0755, true);
+            }
+
+            $file->move($destinationPath, $filename);
+
+            // Lưu link ảo (path) vào DB để sau này load trực tiếp, không cần phải quét thư mục
+            $updateData['avatar_url'] = asset('avatars/' . $user->user_id . '/' . $filename);
+        }
+
+        $user->update($updateData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cập nhật thông tin thành công!',
+            'avatar_url' => $updateData['avatar_url'] ?? $user->avatar_url
+        ]);
     }
 
     public function logout(Request $request)
@@ -174,8 +196,7 @@ class AuthController extends Controller
             $googleUser = Socialite::driver('google')
                 ->setHttpClient(new \GuzzleHttp\Client(['verify' => false]))
                 ->user();
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             return redirect()->route('login')->with('error', 'Lỗi: ' . $e->getMessage());
         }
 
@@ -183,10 +204,12 @@ class AuthController extends Controller
         $user = User::where('email', $googleUser->email)->first();
 
         if ($user) {
-            // Đã có account, log in luôn
+            // Đã có account, cập nhật avatar nếu có và log in luôn
+            if ($googleUser->avatar) {
+                $user->update(['avatar_url' => $googleUser->avatar]);
+            }
             Auth::login($user);
-        }
-        else {
+        } else {
             // Chưa có account, tạo mới
             // Username: lấy từ email (phần trước @) và giới hạn 20 ký tự
             $username = explode('@', $googleUser->email)[0];
@@ -207,6 +230,7 @@ class AuthController extends Controller
                 'email' => $googleUser->email,
                 'password_hash' => Hash::make(str()->random(16)), // Tạo pass ngẫu nhiên vì login qua Google
                 'role' => 'user',
+                'avatar_url' => $googleUser->avatar, // Lưu avatar từ Google
             ]);
 
             Auth::login($user);

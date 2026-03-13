@@ -4,8 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-return new class extends Migration 
-{
+return new class extends Migration {
     /**
      * Run the migrations.
      */
@@ -18,6 +17,7 @@ return new class extends Migration
             $table->string('phone', 10)->nullable(); // VARCHAR(10)
             $table->string('password_hash'); // Mặc định là 255
             $table->string('role', 10)->default('user'); // VARCHAR(10)
+            $table->text('avatar_url')->nullable(); // Thêm cột lưu đường dẫn avatar
             $table->rememberToken();
             $table->timestamps();
         });
