@@ -91,7 +91,6 @@ class AuthController extends Controller
                 'regex:/^[a-zA-Z0-9._%+-]+@gmail\.com$/'
             ],
             'phone' => 'nullable|max:10',
-            'avatar' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // Tối đa 5MB
         ], [
             'email.regex' => 'Chỉ chấp nhận địa chỉ Gmail (@gmail.com)'
         ]);
@@ -101,6 +100,22 @@ class AuthController extends Controller
             'email' => $request->email,
             'phone' => $request->phone,
         ];
+
+        $user->update($updateData);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Cập nhật thông tin thành công!'
+        ]);
+    }
+
+    public function updateAvatar(Request $request)
+    {
+        $user = Auth::user();
+
+        $request->validate([
+            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:5120', // Tối đa 5MB
+        ]);
 
         if ($request->hasFile('avatar')) {
             $file = $request->file('avatar');
@@ -115,15 +130,41 @@ class AuthController extends Controller
             $file->move($destinationPath, $filename);
 
             // Lưu link ảo (path) vào DB để sau này load trực tiếp, không cần phải quét thư mục
-            $updateData['avatar_url'] = asset('avatars/' . $user->user_id . '/' . $filename);
+            $avatar_url = asset('avatars/' . $user->user_id . '/' . $filename);
+            $user->update(['avatar_url' => $avatar_url]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Lưu ảnh đại diện thành công!',
+                'avatar_url' => $avatar_url
+            ]);
         }
 
-        $user->update($updateData);
+        return response()->json([
+            'success' => false,
+            'message' => 'Lỗi tải ảnh lên'
+        ], 400);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'new_password' => 'required|min:6',
+            'new_password_confirmation' => 'required|same:new_password',
+        ], [
+            'new_password.min' => 'Mật khẩu mới phải có ít nhất 6 ký tự',
+            'new_password_confirmation.same' => 'Mật khẩu xác nhận không khớp'
+        ]);
+
+        $user = Auth::user();
+        
+        $user->update([
+            'password_hash' => $request->new_password
+        ]);
 
         return response()->json([
             'success' => true,
-            'message' => 'Cập nhật thông tin thành công!',
-            'avatar_url' => $updateData['avatar_url'] ?? $user->avatar_url
+            'message' => 'Đổi mật khẩu thành công!'
         ]);
     }
 

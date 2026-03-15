@@ -33,6 +33,8 @@ Route::middleware(['auth'])->group(function () {
 
     Route::get('/profile', [AuthController::class, 'profile'])->name('profile');
     Route::post('/api/profile/update', [AuthController::class, 'updateProfile'])->name('profile.update');
+    Route::post('/api/profile/update-avatar', [AuthController::class, 'updateAvatar'])->name('profile.update_avatar');
+    Route::post('/api/profile/change-password', [AuthController::class, 'changePassword'])->name('profile.change_password');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::get('/gio-hang', [CartController::class, 'index'])->name('cart.index');

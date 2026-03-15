@@ -118,10 +118,20 @@
             border: 1px solid #C0392B;
         }
 
-        .btn-profile:hover {
+        .btn-profile:hover:not([disabled]) {
             background-color: #C0392B !important;
             color: white !important;
             border-color: #C0392B !important;
+        }
+
+        .btn-profile:disabled, .btn-profile[disabled] {
+            opacity: 0.5;
+            cursor: not-allowed !important;
+        }
+
+        .avatar-upload-box input[type="file"]:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .avatar-upload-box {
@@ -175,6 +185,7 @@
                 <div class="avatar-upload-box" id="avatarUploadBox">
                     <label>Đổi ảnh đại diện (Tuỳ chọn)</label>
                     <input type="file" id="profAvatar" accept="image/*">
+                    <button type="button" id="btnSaveAvatar" class="btn-profile btn-save-red" style="display: none; margin-top: 10px; padding: 6px; font-size: 13px;" onclick="handleUpdateAvatar()">Lưu ảnh đại diện</button>
                 </div>
             </div>
 
@@ -211,13 +222,13 @@
                         <i class="fas fa-save"></i> Lưu sửa đổi
                     </button>
 
-                    <button type="button" class="btn-profile btn-outline" onclick="alert('Chức năng đang phát triển')">
+                    <button type="button" id="btnChangePassword" class="btn-profile btn-outline" onclick="openChangePasswordModal()">
                         <i class="fas fa-key"></i> Đổi mật khẩu
                     </button>
 
                     <form action="{{ route('logout') }}" method="POST" id="logoutForm">
                         @csrf
-                        <button type="submit" class="btn-profile btn-logout-outline">
+                        <button type="submit" id="btnLogout" class="btn-profile btn-logout-outline">
                             <i class="fas fa-sign-out-alt"></i> Đăng xuất
                         </button>
                     </form>
@@ -240,12 +251,35 @@
         </div>
     </div>
 
+    <!-- Modal đổi mật khẩu -->
+    <div id="changePasswordModal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 25px; border-radius: 8px; width: 90%; max-width: 400px;">
+            <h3 style="margin-top: 0; margin-bottom: 20px; text-align: center; color: #333;">Đổi mật khẩu</h3>
+            <form id="changePasswordForm" onsubmit="event.preventDefault(); submitChangePassword();">
+                <div class="form-group">
+                    <label>Mật khẩu mới (*):</label>
+                    <input type="password" id="newPassword" required minlength="6" placeholder="Nhập mật khẩu mới">
+                </div>
+                <div class="form-group">
+                    <label>Xác nhận mật khẩu mới (*):</label>
+                    <input type="password" id="confirmNewPassword" required minlength="6" placeholder="Nhập lại mật khẩu mới">
+                </div>
+                <div style="text-align: right; gap: 10px; display: flex; justify-content: flex-end; margin-top: 25px;">
+                    <button type="button" class="btn-profile btn-outline" style="width: auto; padding: 10px 20px;" onclick="closeChangePasswordModal()">Huỷ</button>
+                    <button type="submit" class="btn-profile btn-save-red" style="width: auto; padding: 10px 20px;">Xác nhận</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         function toggleEditMode(isEditing) {
             const inputs = ['profUsername', 'profEmail', 'profPhone'];
             const btnEdit = document.getElementById('btnEdit');
             const btnSave = document.getElementById('btnSave');
             const profAvatar = document.getElementById('profAvatar');
+            const btnChangePassword = document.getElementById('btnChangePassword');
+            const btnLogout = document.getElementById('btnLogout');
 
             inputs.forEach(id => {
                 const input = document.getElementById(id);
@@ -256,13 +290,19 @@
                 }
             });
 
-            const avatarBox = document.getElementById('avatarUploadBox');
-
             if (isEditing) {
-                // Lúc sửa thì không khoá profAvatar
+                // Khóa 3 nút kia lại
+                profAvatar.setAttribute('disabled', 'true');
+                btnChangePassword.setAttribute('disabled', 'true');
+                btnLogout.setAttribute('disabled', 'true');
             } else {
+                profAvatar.removeAttribute('disabled');
                 profAvatar.value = ''; // Xoá file đã chọn nếu huỷ
                 croppedImageBlob = null; // Xoá blob cắt
+                document.getElementById('btnSaveAvatar').style.display = 'none';
+
+                btnChangePassword.removeAttribute('disabled');
+                btnLogout.removeAttribute('disabled');
             }
 
             btnEdit.style.display = isEditing ? 'none' : 'flex';
@@ -292,7 +332,6 @@
                     });
                 };
                 reader.readAsDataURL(file);
-                toggleEditMode(true);
             }
         });
 
@@ -303,6 +342,11 @@
                 cropper = null;
             }
             document.getElementById('profAvatar').value = '';
+
+            // Mở khóa lại nếu hủy cắt ảnh
+            document.getElementById('btnEdit').removeAttribute('disabled');
+            document.getElementById('btnChangePassword').removeAttribute('disabled');
+            document.getElementById('btnLogout').removeAttribute('disabled');
         }
 
         function cropImage() {
@@ -320,6 +364,14 @@
                 const url = URL.createObjectURL(blob);
                 avatarBox.innerHTML = `<img src="${url}" alt="User Avatar" style="width: 100%; height: 100%; object-fit: cover;" referrerpolicy="no-referrer">`;
                 
+                // Hiện nút lưu riêng cho ảnh đại diện
+                document.getElementById('btnSaveAvatar').style.display = 'block';
+
+                // KHÓA các nút còn lại
+                document.getElementById('btnEdit').setAttribute('disabled', 'true');
+                document.getElementById('btnChangePassword').setAttribute('disabled', 'true');
+                document.getElementById('btnLogout').setAttribute('disabled', 'true');
+
                 if (cropper) {
                     cropper.destroy();
                     cropper = null;
@@ -327,18 +379,43 @@
             }, 'image/jpeg');
         }
 
+        async function handleUpdateAvatar() {
+            if (!croppedImageBlob) {
+                alert('Vui lòng chọn và cắt ảnh trước!');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('avatar', croppedImageBlob, 'avatar.jpg');
+
+            try {
+                const response = await fetch("{{ route('profile.update_avatar') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(result.message);
+                    window.location.reload(); 
+                } else {
+                    alert(result.message || 'Cập nhật thất bại');
+                }
+            } catch (error) {
+                alert('Không thể kết nối máy chủ!');
+            }
+        }
+
         async function handleUpdateProfile() {
             const formData = new FormData();
             formData.append('username', document.getElementById('profUsername').value);
             formData.append('email', document.getElementById('profEmail').value);
             formData.append('phone', document.getElementById('profPhone').value);
-
-            const fileInput = document.getElementById('profAvatar');
-            if (croppedImageBlob) {
-                formData.append('avatar', croppedImageBlob, 'avatar.jpg');
-            } else if (fileInput.files.length > 0) {
-                formData.append('avatar', fileInput.files[0]);
-            }
 
             try {
                 const response = await fetch("{{ route('profile.update') }}", {
@@ -362,6 +439,55 @@
                     }
                 } else {
                     alert(result.message || 'Cập nhật thất bại');
+                }
+            } catch (error) {
+                alert('Không thể kết nối máy chủ!');
+            }
+        }
+
+        function openChangePasswordModal() {
+            document.getElementById('changePasswordModal').style.display = 'flex';
+        }
+
+        function closeChangePasswordModal() {
+            document.getElementById('changePasswordModal').style.display = 'none';
+            document.getElementById('changePasswordForm').reset();
+        }
+
+        async function submitChangePassword() {
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+            if (newPassword !== confirmNewPassword) {
+                alert('Mật khẩu xác nhận không khớp!');
+                return;
+            }
+
+            try {
+                const response = await fetch("{{ route('profile.change_password') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify({
+                        new_password: newPassword,
+                        new_password_confirmation: confirmNewPassword
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    alert(result.message);
+                    closeChangePasswordModal();
+                } else {
+                    let errorMsg = result.message || 'Đổi mật khẩu thất bại';
+                    if (result.errors) {
+                        errorMsg += ": " + Object.values(result.errors).flat().join(', ');
+                    }
+                    alert(errorMsg);
                 }
             } catch (error) {
                 alert('Không thể kết nối máy chủ!');
