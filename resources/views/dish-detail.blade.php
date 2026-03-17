@@ -54,11 +54,12 @@
     .btn-add:hover { background: #a93226; transform: translateY(-2px); color: white; }
 
     .pagination-container { 
-        display: flex; 
-        justify-content: center; 
-        gap: 8px; 
-        margin: 30px 0 60px 0; 
-        flex-wrap: nowrap; 
+        display: grid;
+        grid-template-columns: repeat(10, 35px);
+        gap: 8px;
+        justify-content: center;
+        margin: 40px auto 60px auto;
+        width: fit-content;
     }
     .page-number {
         display: flex; align-items: center; justify-content: center; 
@@ -84,17 +85,14 @@
 
 <div class="detail-section">
     <div class="detail-left">
-        <img src="{{ asset('pics/' . ($mon->image_url ?? 'default.jpg')) }}" alt="{{ $mon->dish_name ?? 'Món ăn' }}">
+        <img src="{{ $mon->image_url }}" alt="{{ $mon->dish_name ?? 'Món ăn' }}">
     </div>
 
     <div class="detail-right">
         <h1 class="dish-title">{{ $mon->dish_name ?? 'Đang tải...' }}</h1>
         <div class="dish-price">{{ number_format($mon->price ?? 0, 0, ',', '.') }} VNĐ</div>
         
-        <div class="dish-desc">
-            <strong>Mô tả:</strong><br>
-            {{ $mon->description ?? 'Hiện chưa có mô tả chi tiết cho món ăn này.' }}
-        </div>
+        {{-- Xóa bỏ mục mô tả theo yêu cầu --}}
 
         <div class="button-group">
             <a href="{{ url('/menu') }}" class="btn-back"> &larr; Quay về</a>
@@ -113,11 +111,13 @@
 </div>
 
 <div class="pagination-container">
-    @for ($i = 1; $i <= 12; $i++)
-        <a href="{{ url('/menu/' . $i) }}" class="page-number {{ (isset($mon) && $mon->dish_id == $i) ? 'active' : '' }}">
-            {{ $i }}
+    @foreach ($allDishes as $index => $d)
+        <a href="{{ url('/menu/' . $d->dish_id) }}" 
+           class="page-number {{ $mon->dish_id == $d->dish_id ? 'active' : '' }}"
+           title="{{ $d->dish_name }}">
+            {{ $index + 1 }}
         </a>
-    @endfor
+    @endforeach
 </div>
 
 @auth

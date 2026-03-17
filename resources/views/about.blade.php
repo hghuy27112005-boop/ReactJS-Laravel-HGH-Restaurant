@@ -58,7 +58,7 @@
             </p>
         </div>
         <div class="about-image">
-            <img src="{{ asset('pics/13.jpg') }}" alt="Không gian nhà hàng HGH">
+            <img src="{{ asset('pics/30.jpg') }}" alt="Không gian nhà hàng HGH">
         </div>
     </div>
 </div>

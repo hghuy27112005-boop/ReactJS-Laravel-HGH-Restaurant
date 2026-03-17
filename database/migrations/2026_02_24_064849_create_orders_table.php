@@ -26,7 +26,6 @@ return new class extends Migration
             $table->string('image_url', 255)->nullable();
             $table->unsignedBigInteger('type_id')->nullable();
             $table->boolean('is_bestseller')->default(false);
-            $table->text('description')->nullable();
 
             $table->foreign('type_id')->references('type_id')->on('dish_types')->onDelete('set null');
         });

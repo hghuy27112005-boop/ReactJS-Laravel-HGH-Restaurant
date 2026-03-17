@@ -16,6 +16,37 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Xóa sạch thư mục avatars trong public trước khi seed
+        $avatarPath = public_path('avatars');
+        if (file_exists($avatarPath)) {
+            \Illuminate\Support\Facades\File::cleanDirectory($avatarPath);
+        }
+
+        // Xử lý thư mục dishes: Xóa sạch đồ cũ, copy lại 12 ảnh gốc từ kho lưu trữ (folder pics)
+        $dishPath = public_path('dishes');
+        $dishBackupPath = public_path('pics');
+
+        if (!file_exists($dishPath)) {
+            mkdir($dishPath, 0755, true);
+        }
+        else {
+            \Illuminate\Support\Facades\File::cleanDirectory($dishPath);
+        }
+
+        if (file_exists($dishBackupPath)) {
+            for ($i = 1; $i <= 12; $i++) {
+                $sourceName = str_pad($i, 2, '0', STR_PAD_LEFT) . '.jpg'; // '01.jpg', '02.jpg'...
+                $targetName = $i . '.jpg'; // '1.jpg', '2.jpg'...
+
+                $sourceFile = $dishBackupPath . '/' . $sourceName;
+                $targetFile = $dishPath . '/' . $targetName;
+
+                if (file_exists($sourceFile)) {
+                    \Illuminate\Support\Facades\File::copy($sourceFile, $targetFile);
+                }
+            }
+        }
+
         // Xóa dữ liệu cũ trước khi seed (truật tự quan trọng do khóa ngoại)
         DB::table('bill_details')->delete();
         DB::table('booking_tables')->delete();
@@ -25,25 +56,25 @@ class DatabaseSeeder extends Seeder
 
         // Seed Dish Types
         DB::table('dish_types')->insert([
-            ['type_id' => 1, 'type_name' => 'Khai vị'],
-            ['type_id' => 2, 'type_name' => 'Món chính'],
-            ['type_id' => 3, 'type_name' => 'Tráng miệng'],
+            ['type_id' => 1, 'type_name' => 'Món mặn'],
+            ['type_id' => 2, 'type_name' => 'Món rau'],
+            ['type_id' => 3, 'type_name' => 'Món canh'],
         ]);
 
         // Seed Dishes
         DB::table('dishes')->insert([
-            ['dish_name' => 'Nem chiên', 'price' => 30000, 'image_url' => '01.jpg', 'type_id' => 1, 'is_bestseller' => true, 'description' => 'Nem rán giòn rụm với nhân thịt bằm và mộc nhĩ truyền thống.'],
-            ['dish_name' => 'Bánh cuốn', 'price' => 30000, 'image_url' => '02.jpg', 'type_id' => 1, 'is_bestseller' => true, 'description' => 'Bánh cuốn mỏng mịn, thơm nồng hương hành phi.'],
-            ['dish_name' => 'Gỏi cuốn tôm thịt', 'price' => 30000, 'image_url' => '03.jpg', 'type_id' => 1, 'is_bestseller' => true, 'description' => 'Gỏi cuốn tươi mát với tôm, thịt ba chỉ và rau sống thanh đạm.'],
-            ['dish_name' => 'Canh chua cá quả', 'price' => 30000, 'image_url' => '04.jpg', 'type_id' => 1, 'is_bestseller' => true, 'description' => 'Canh chua cá quả đậm đà hương vị, chua cay hài hòa.'],
-            ['dish_name' => 'Cơm cà ri thịt heo chiên xù', 'price' => 30000, 'image_url' => '05.jpg', 'type_id' => 2, 'is_bestseller' => false, 'description' => 'Thịt heo chiên xù giòn tan quyện cùng sốt cà ri Nhật bản đặc trưng.'],
-            ['dish_name' => 'Lagu gà', 'price' => 30000, 'image_url' => '06.jpg', 'type_id' => 2, 'is_bestseller' => false, 'description' => 'Gà nấu lagu mềm thơm, dùng kèm bánh mì nóng hổi rất tuyệt vời.'],
-            ['dish_name' => 'Bò kho', 'price' => 30000, 'image_url' => '07.jpg', 'type_id' => 2, 'is_bestseller' => false, 'description' => 'Bò kho đậm vị, miếng bò mềm tan cùng cà rốt và sả thơm nồng.'],
-            ['dish_name' => 'Cơm chiên dương châu', 'price' => 30000, 'image_url' => '08.jpg', 'type_id' => 2, 'is_bestseller' => false, 'description' => 'Cơm chiên hạt tơi, đầy đủ màu sắc.'],
-            ['dish_name' => 'Cơm chiên cá mặn', 'price' => 30000, 'image_url' => '09.jpg', 'type_id' => 2, 'is_bestseller' => false, 'description' => 'Hương vị biển cả đậm đà từ cá mặn quyện trong hạt cơm chiên giòn.'],
-            ['dish_name' => 'Đậu hũ nhồi thịt', 'price' => 30000, 'image_url' => '10.jpg', 'type_id' => 2, 'is_bestseller' => false, 'description' => 'Đậu hũ nhồi thịt đậm đà, sốt cà chua thanh ngọt đưa cơm.'],
-            ['dish_name' => 'Thịt ba chỉ kho', 'price' => 30000, 'image_url' => '11.jpg', 'type_id' => 2, 'is_bestseller' => false, 'description' => 'Thịt ba chỉ kho tàu mềm rục và béo ngậy.'],
-            ['dish_name' => 'Bò xào đậu cove', 'price' => 30000, 'image_url' => '12.jpg', 'type_id' => 2, 'is_bestseller' => false, 'description' => 'Thịt bò xào nhanh tay với đậu cove xanh mướt, giữ độ giòn ngọt.'],
+            ['dish_name' => 'Nem chiên', 'price' => 30000, 'image_url' => '1.jpg', 'type_id' => 1, 'is_bestseller' => true],
+            ['dish_name' => 'Bánh cuốn', 'price' => 30000, 'image_url' => '2.jpg', 'type_id' => 1, 'is_bestseller' => true],
+            ['dish_name' => 'Gỏi cuốn tôm thịt', 'price' => 30000, 'image_url' => '3.jpg', 'type_id' => 1, 'is_bestseller' => true],
+            ['dish_name' => 'Canh chua cá quả', 'price' => 30000, 'image_url' => '4.jpg', 'type_id' => 3, 'is_bestseller' => true],
+            ['dish_name' => 'Cơm cà ri thịt heo chiên xù', 'price' => 30000, 'image_url' => '5.jpg', 'type_id' => 1, 'is_bestseller' => false],
+            ['dish_name' => 'Lagu gà', 'price' => 30000, 'image_url' => '6.jpg', 'type_id' => 1, 'is_bestseller' => false],
+            ['dish_name' => 'Bò kho', 'price' => 30000, 'image_url' => '7.jpg', 'type_id' => 1, 'is_bestseller' => false],
+            ['dish_name' => 'Cơm chiên dương châu', 'price' => 30000, 'image_url' => '8.jpg', 'type_id' => 1, 'is_bestseller' => false],
+            ['dish_name' => 'Cơm chiên cá mặn', 'price' => 30000, 'image_url' => '9.jpg', 'type_id' => 1, 'is_bestseller' => false],
+            ['dish_name' => 'Đậu hũ nhồi thịt', 'price' => 30000, 'image_url' => '10.jpg', 'type_id' => 1, 'is_bestseller' => false],
+            ['dish_name' => 'Thịt ba chỉ kho', 'price' => 30000, 'image_url' => '11.jpg', 'type_id' => 1, 'is_bestseller' => false],
+            ['dish_name' => 'Bò xào đậu cove', 'price' => 30000, 'image_url' => '12.jpg', 'type_id' => 1, 'is_bestseller' => false],
         ]);
 
         // Seed Users
@@ -175,7 +206,8 @@ class DatabaseSeeder extends Seeder
                 // Determine order_in_day
                 if ($isOnline) {
                     $orderInDay = $onlineOrderCounter++;
-                } else {
+                }
+                else {
                     // Each user has a unique date for booking, so they occupy order 1 and 2 of that date
                     $orderInDay = ($i == 2) ? 1 : 2;
                 }

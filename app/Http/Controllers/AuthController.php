@@ -22,6 +22,9 @@ class AuthController extends Controller
         if (Auth::attempt(['username' => $credentials['username'], 'password' => $credentials['password']])) {
             $request->session()->regenerate();
 
+            // Đồng bộ avatar khi đăng nhập
+            Auth::user()->syncAvatar();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Đăng nhập thành công',
@@ -52,19 +55,27 @@ class AuthController extends Controller
         ]);
 
         try {
-            User::create([
+            $user = User::create([
                 'username' => $request->username,
                 'email' => $request->email,
                 'phone' => $request->phone,
-                'password_hash' => $request->password,
+                'password_hash' => Hash::make($request->password),
                 'role' => 'user',
             ]);
 
+            // Đăng nhập ngay sau khi đăng kí
+            Auth::login($user);
+
+            // Đồng bộ avatar (mới tạo thì sẽ dùng mặc định)
+            $user->syncAvatar();
+
             return response()->json([
                 'success' => true,
-                'message' => 'Đăng ký thành công!'
+                'message' => 'Đăng ký và đăng nhập thành công!',
+                'role' => $user->role
             ]);
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi: ' . $e->getMessage()
@@ -157,9 +168,9 @@ class AuthController extends Controller
         ]);
 
         $user = Auth::user();
-        
+
         $user->update([
-            'password_hash' => $request->new_password
+            'password_hash' => Hash::make($request->new_password)
         ]);
 
         return response()->json([
@@ -217,7 +228,7 @@ class AuthController extends Controller
 
         $user = User::findOrFail($request->user_id);
         $user->update([
-            'password_hash' => $request->password,
+            'password_hash' => Hash::make($request->password),
         ]);
 
         return response()->json([
@@ -237,7 +248,8 @@ class AuthController extends Controller
             $googleUser = Socialite::driver('google')
                 ->setHttpClient(new \GuzzleHttp\Client(['verify' => false]))
                 ->user();
-        } catch (\Exception $e) {
+        }
+        catch (\Exception $e) {
             return redirect()->route('login')->with('error', 'Lỗi: ' . $e->getMessage());
         }
 
@@ -250,7 +262,8 @@ class AuthController extends Controller
                 $user->update(['avatar_url' => $googleUser->avatar]);
             }
             Auth::login($user);
-        } else {
+        }
+        else {
             // Chưa có account, tạo mới
             // Username: lấy từ email (phần trước @) và giới hạn 20 ký tự
             $username = explode('@', $googleUser->email)[0];
@@ -276,6 +289,9 @@ class AuthController extends Controller
 
             Auth::login($user);
         }
+
+        // Đồng bộ avatar (kiểm tra folder địa phương trước, nếu không có mới dùng link Google)
+        Auth::user()->syncAvatar();
 
         // Thông báo thành công và chuyển về trang chủ
         return redirect('/')->with('success', 'Đăng nhập Gmail thành công!');

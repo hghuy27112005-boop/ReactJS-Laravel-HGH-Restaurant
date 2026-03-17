@@ -27,7 +27,7 @@
     <div class="dishes-grid">
         @foreach ($highlights as $dish)
             <div class="dish-card">
-                <img src="{{ asset('pics/' . $dish->image_url) }}" class="dish-img" alt="{{ $dish->dish_name }}">
+                <img src="{{ $dish->image_url }}" class="dish-img" alt="{{ $dish->dish_name }}">
                 <h3>{{ $dish->dish_name }}</h3>
                 <p class="price">{{ number_format($dish->price, 0, ',', '.') }}đ</p>
                 

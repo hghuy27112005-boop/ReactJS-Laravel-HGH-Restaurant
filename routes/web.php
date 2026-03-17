@@ -6,8 +6,10 @@ use App\Http\Controllers\DishController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\AuthController;
 
+use App\Models\Dish;
+
 Route::get('/', function () {
-    $highlights = DB::table('dishes')->where('is_bestseller', true)->get();
+    $highlights = Dish::where('is_bestseller', true)->get();
     return view('home', ['highlights' => $highlights]);
 });
 
@@ -52,6 +54,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Admin routes
     Route::get('/admin/menu-management', [DishController::class, 'menuManagement'])->name('admin.menu_management');
+    Route::post('/admin/add-dish', [DishController::class, 'addDish'])->name('admin.add_dish');
+    Route::post('/admin/edit-dish/{id}', [DishController::class, 'updateDish'])->name('admin.edit_dish');
+    Route::post('/admin/delete-dish/{id}', [DishController::class, 'deleteDish'])->name('admin.delete_dish');
 
     Route::get('/admin/transaction-management', [CartController::class, 'transactionManagement'])->name('admin.transaction_management');
 });

@@ -162,21 +162,11 @@
     <div class="profile-main-wrapper">
         <div class="profile-container">
             <div class="profile-sidebar">
-                @if($user->avatar_url)
-                    <div class="profile-avatar-box" style="overflow: hidden;">
-                        <img src="{{ $user->avatar_url }}" alt="User Avatar"
-                            style="width: 100%; height: 100%; object-fit: cover;" referrerpolicy="no-referrer">
-                    </div>
-                @elseif($user->role === 'admin')
-                    <div class="profile-avatar-box" style="background: #f9f9f9; border: 1px solid #ddd; overflow: hidden;">
-                        <img src="{{ asset('hgh-apple.png') }}" alt="Admin Avatar"
-                            style="width: 100%; height: 100%; object-fit: contain;">
-                    </div>
-                @else
-                    <div class="profile-avatar-box">
-                        <i class="fas fa-user-shield"></i>
-                    </div>
-                @endif
+                <div class="profile-avatar-box" style="overflow: hidden; background: #f9f9f9; border: 1px solid #ddd;">
+                    <img src="{{ $user->avatar_url }}" alt="User Avatar"
+                        style="width: 100%; height: 100%; object-fit: {{ $user->role === 'admin' && !$user->getRawOriginal('avatar_url') ? 'contain' : 'cover' }};" 
+                        referrerpolicy="no-referrer">
+                </div>
                 <h3 style="margin: 0 0 5px 0; color: #333;">{{ $user->username }}</h3>
                 <p style="color: #C0392B; font-weight: bold; margin: 0; font-size: 14px;">
                     Vai trò: {{ $user->role }}

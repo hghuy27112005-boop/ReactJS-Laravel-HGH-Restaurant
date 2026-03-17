@@ -41,7 +41,7 @@
         @foreach($danhSachMon as $mon)
             <div class="dish-card">
                 <a href="{{ url('/menu/' . $mon->dish_id) }}">
-                    <img src="{{ asset('pics/' . $mon->image_url) }}" alt="{{ $mon->dish_name }}">
+                    <img src="{{ $mon->image_url }}" alt="{{ $mon->dish_name }}">
                 </a>
 
                 <a href="{{ url('/menu/' . $mon->dish_id) }}" style="text-decoration: none; color: #333;">
