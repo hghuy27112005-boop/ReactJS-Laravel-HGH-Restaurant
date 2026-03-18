@@ -53,12 +53,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/export-pdf', [CartController::class, 'exportPDF']);
 
     // Admin routes
-    Route::get('/admin/menu-management', [DishController::class, 'menuManagement'])->name('admin.menu_management');
-    Route::post('/admin/add-dish', [DishController::class, 'addDish'])->name('admin.add_dish');
-    Route::post('/admin/edit-dish/{id}', [DishController::class, 'updateDish'])->name('admin.edit_dish');
-    Route::post('/admin/delete-dish/{id}', [DishController::class, 'deleteDish'])->name('admin.delete_dish');
-
-    Route::get('/admin/transaction-management', [CartController::class, 'transactionManagement'])->name('admin.transaction_management');
+    Route::middleware(['admin'])->group(function () {
+        Route::get('/admin/menu-management', [DishController::class, 'menuManagement'])->name('admin.menu_management');
+        Route::post('/admin/add-dish', [DishController::class, 'addDish'])->name('admin.add_dish');
+        Route::post('/admin/edit-dish/{id}', [DishController::class, 'updateDish'])->name('admin.edit_dish');
+        Route::post('/admin/delete-dish/{id}', [DishController::class, 'deleteDish'])->name('admin.delete_dish');
+        Route::get('/admin/transaction-management', [CartController::class, 'transactionManagement'])->name('admin.transaction_management');
+    });
 });
 
 Route::get('/clear', function () {

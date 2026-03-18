@@ -173,7 +173,7 @@
             background: #fff;
             width: 550px;
             border-radius: 24px;
-            padding: 40px;
+            padding: 25px 35px; /* Reduced vertical padding */
             position: relative;
             box-shadow: 0 20px 60px rgba(0,0,0,0.15);
             border: 1px solid rgba(0,0,0,0.05);
@@ -181,7 +181,7 @@
 
         .modal-header {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 15px; /* Reduced margin */
         }
 
         .modal-header h2 {
@@ -197,11 +197,11 @@
             font-size: 14px;
         }
 
-        .form-group { margin-bottom: 24px; }
+        .form-group { margin-bottom: 14px; } /* Reduced from 24px */
         .form-group label {
             display: block;
             font-weight: 700;
-            margin-bottom: 10px;
+            margin-bottom: 5px; /* Reduced from 10px */
             font-size: 14px;
             color: #2C3E50;
         }
@@ -218,7 +218,7 @@
 
         .form-group input[type="text"],
         .form-group select {
-            padding: 12px 18px;
+            padding: 10px 18px; /* Reduced vertical padding */
             font-size: 15px;
             background: #fdfdfd;
         }
@@ -232,7 +232,7 @@
 
         .price-display {
             background: #f8f9fa;
-            padding: 12px 18px;
+            padding: 10px 18px; /* Reduced vertical padding */
             font-weight: 800;
             color: #C0392B;
             font-size: 16px;
@@ -240,7 +240,7 @@
 
         .upload-area {
             border: 2px dashed #eee;
-            padding: 16px;
+            padding: 12px; /* Reduced padding */
             border-radius: 16px;
             text-align: center;
             background: #fcfcfc;
@@ -253,11 +253,11 @@
         .upload-area:hover { border-color: #C0392B; background: #fff; }
 
         .current-img-preview {
-            width: 120px;
-            height: 120px;
+            width: 100px; /* Reduced from 120px */
+            height: 100px;
             object-fit: cover;
             border-radius: 16px;
-            margin: 0 auto 15px;
+            margin: 0 auto 10px;
             display: block;
             border: 3px solid #fff;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
@@ -290,7 +290,7 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            padding: 15px;
+            padding: 12px; /* Reduced from 15px */
             background: #FAFBFF;
             border-radius: 12px;
             border: 1px solid #EBF0FF;

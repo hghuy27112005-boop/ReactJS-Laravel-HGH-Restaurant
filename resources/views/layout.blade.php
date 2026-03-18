@@ -173,6 +173,34 @@
         .social-links a:hover {
             color: #FFD700;
         }
+
+        .footer-left p, .social-links a {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            font-size: 18px;
+        }
+
+        .footer-icon {
+            width: 30px; /* Fixed width to align text start */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 4px;
+        }
+
+        .copyright-symbol {
+            font-size: 1.4em;
+        }
+
+        .at-symbol {
+            font-size: 1.2em;
+            font-weight: 600;
+        }
+
+        .main-footer i.footer-icon {
+            font-size: 1.1em;
+        }
     </style>
 </head>
 
@@ -251,13 +279,21 @@
     @if(!Request::is('menu/*') && (!Auth::check() || Auth::user()->role !== 'admin'))
         <footer class="main-footer">
             <div class="footer-left">
-                <p>&copy; 2026 NHÀ HÀNG HGH. Mọi quyền được bảo lưu.</p>
-                <p>Địa chỉ: Số 52, đường số 2, Khu CBGV DHCT, Phường An Khánh, Quận Ninh Kiều, TP.Cần Thơ</p>
+                <p>
+                    <span class="footer-icon"><span class="copyright-symbol">&copy;</span></span>
+                    {{ date('Y') }} NHÀ HÀNG HGH. Mọi quyền được bảo lưu.
+                </p>
+                <p>
+                    <span class="footer-icon"><i class="fas fa-location-dot"></i></span>
+                    Khu 2, Đ. 3/2, P. Ninh Kiều, TP. Cần Thơ
+                </p>
             </div>
             <div class="footer-right">
                 <div class="social-links">
-                    <a href="#"><i class="fas fa-envelope"></i> Email hỗ trợ</a>
-                    <a href="#"><i class="fab fa-facebook-f"></i> Facebook</a>
+                    <a href="mailto:huyb2306534@student.ctu.edu.vn">
+                        <span class="footer-icon"><span class="at-symbol">@</span></span>
+                        huyb2306534@student.ctu.edu.vn
+                    </a>
                 </div>
             </div>
         </footer>
