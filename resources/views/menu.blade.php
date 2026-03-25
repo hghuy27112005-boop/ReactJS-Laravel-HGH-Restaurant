@@ -137,7 +137,7 @@
         let qty = parseInt(qtyInput.value);
 
         if (isNaN(qty) || qty < 1 || qty > 10) {
-            alert("Vui lòng nhập số lượng từ 1 đến 10!");
+            hghAlert("Vui lòng nhập số lượng từ 1 đến 10!", "warning");
             return;
         }
 
@@ -163,12 +163,12 @@
             return res.json();
         })
         .then(data => {
-            alert(`Thành công! Đã thêm ${qty} ${currentDish.name} vào giỏ hàng.`);
+            hghAlert(`Thành công! Đã thêm ${qty} ${currentDish.name} vào giỏ hàng.`, "success");
             closeModal();
         })
         .catch(err => {
             console.error(err);
-            alert(err.message || "Lỗi kết nối server!");
+            hghAlert(err.message || "Lỗi kết nối server!", "error");
         });
     }
 </script>

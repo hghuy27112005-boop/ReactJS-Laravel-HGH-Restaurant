@@ -14,12 +14,19 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
-        $credentials = $request->validate([
+        $request->validate([
             'username' => 'required',
             'password' => 'required',
+        ], [
+            'username.required' => 'Vui lòng nhập Tên người dùng hoặc Email.',
+            'password.required' => 'Vui lòng nhập mật khẩu.'
         ]);
 
-        if (Auth::attempt(['username' => $credentials['username'], 'password' => $credentials['password']])) {
+        // Tự động nhận diện Email hay Username
+        $login = $request->input('username');
+        $loginType = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+
+        if (Auth::attempt([$loginType => $login, 'password' => $request->password])) {
             $request->session()->regenerate();
 
             // Đồng bộ avatar khi đăng nhập
@@ -40,19 +47,36 @@ class AuthController extends Controller
 
     public function storeRegister(Request $request)
     {
-        $request->validate([
-            'username' => 'required|unique:users,username|max:20',
+        $validator = Validator::make($request->all(), [
+            'username' => 'required|max:20|unique:users,username',
             'email' => [
-                'nullable',
+                'required',
                 'email',
                 'max:50',
-                'regex:/^[a-zA-Z0-9._%+-]+@gmail\.com$/'
+                'unique:users,email',
+                'regex:/^[a-zA-Z0-9._%+-]+@((student\.)?ctu\.edu\.vn|gmail\.com)$/',
             ],
             'phone' => 'nullable|max:10',
-            'password' => 'required|min:6',
+            'password' => 'required|min:6|confirmed', // 'confirmed' kiểm tra password_confirmation
         ], [
-            'email.regex' => 'Email phải có định dạng @gmail.com (Ví dụ: user@gmail.com)'
+            'username.required' => 'Vui lòng nhập tên đăng nhập.',
+            'username.unique' => 'Tên đăng nhập này đã tồn tại.',
+            'username.max' => 'Tên đăng nhập không được quá 20 ký tự.',
+            'email.required' => 'Vui lòng nhập địa chỉ Gmail.',
+            'email.email' => 'Định dạng Email không hợp lệ.',
+            'email.unique' => 'Tài khoản ứng với Gmail này đã tồn tại.',
+            'email.regex' => 'Email phải có định dạng @gmail.com.',
+            'password.required' => 'Vui lòng nhập mật khẩu.',
+            'password.min' => 'Mật khẩu phải có ít nhất 6 ký tự.',
+            'password.confirmed' => 'Mật khẩu nhập lại không khớp.'
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first() // CHỈ LẤY LỖI ĐẦU TIÊN
+            ], 422);
+        }
 
         try {
             $user = User::create([
@@ -63,22 +87,19 @@ class AuthController extends Controller
                 'role' => 'user',
             ]);
 
-            // Đăng nhập ngay sau khi đăng kí
             Auth::login($user);
-
-            // Đồng bộ avatar (mới tạo thì sẽ dùng mặc định)
             $user->syncAvatar();
 
             return response()->json([
                 'success' => true,
-                'message' => 'Đăng ký và đăng nhập thành công!',
+                'message' => 'Đăng ký thành công!',
                 'role' => $user->role
             ]);
         }
         catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi: ' . $e->getMessage()
+                'message' => 'Lỗi hệ thống: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -93,26 +114,34 @@ class AuthController extends Controller
     {
         $user = Auth::user();
 
-        $request->validate([
+        $validator = Validator::make($request->all(), [
             'username' => 'required|max:20|unique:users,username,' . $user->user_id . ',user_id',
             'email' => [
-                'nullable',
+                'required', // Đổi từ nullable sang required
                 'email',
                 'max:50',
-                'regex:/^[a-zA-Z0-9._%+-]+@gmail\.com$/'
+                'regex:/^[a-zA-Z0-9._%+-]+@((student\.)?ctu\.edu\.vn|gmail\.com)$/'
             ],
             'phone' => 'nullable|max:10',
         ], [
+            'username.required' => 'Vui lòng nhập tên đăng nhập.',
+            'username.unique' => 'Tên đăng nhập này đã tồn tại.',
+            'email.required' => 'Vui lòng nhập địa chỉ Gmail.',
             'email.regex' => 'Chỉ chấp nhận địa chỉ Gmail (@gmail.com)'
         ]);
 
-        $updateData = [
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first()
+            ], 422);
+        }
+
+        $user->update([
             'username' => $request->username,
             'email' => $request->email,
             'phone' => $request->phone,
-        ];
-
-        $user->update($updateData);
+        ]);
 
         return response()->json([
             'success' => true,
@@ -159,13 +188,20 @@ class AuthController extends Controller
 
     public function changePassword(Request $request)
     {
-        $request->validate([
-            'new_password' => 'required|min:6',
-            'new_password_confirmation' => 'required|same:new_password',
+        $validator = Validator::make($request->all(), [
+            'new_password' => 'required|min:6|confirmed',
         ], [
-            'new_password.min' => 'Mật khẩu mới phải có ít nhất 6 ký tự',
-            'new_password_confirmation.same' => 'Mật khẩu xác nhận không khớp'
+            'new_password.required' => 'Vui lòng nhập mật khẩu mới.',
+            'new_password.min' => 'Mật khẩu mới phải có ít nhất 6 ký tự.',
+            'new_password.confirmed' => 'Xác nhận mật khẩu không khớp.'
         ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => $validator->errors()->first()
+            ], 422);
+        }
 
         $user = Auth::user();
 
@@ -196,8 +232,14 @@ class AuthController extends Controller
     {
         $request->validate([
             'username' => 'required',
-            'email' => 'required|email',
+            'email' => [
+                'required',
+                'email',
+                'regex:/^[a-zA-Z0-9._%+-]+@((student\.)?ctu\.edu\.vn|gmail\.com)$/'
+            ],
             'phone' => 'required',
+        ], [
+            'email.regex' => 'Định dạng Email không hợp lệ.'
         ]);
 
         $user = User::where('username', $request->username)

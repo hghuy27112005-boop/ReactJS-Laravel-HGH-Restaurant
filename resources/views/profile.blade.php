@@ -371,7 +371,7 @@
 
         async function handleUpdateAvatar() {
             if (!croppedImageBlob) {
-                alert('Vui lòng chọn và cắt ảnh trước!');
+                hghAlert('Vui lòng chọn và cắt ảnh trước!', 'warning');
                 return;
             }
 
@@ -391,13 +391,14 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    alert(result.message);
-                    window.location.reload(); 
+                    hghAlert(result.message, 'success').then(() => {
+                        window.location.reload(); 
+                    });
                 } else {
-                    alert(result.message || 'Cập nhật thất bại');
+                    hghAlert(result.message || 'Cập nhật thất bại', 'error');
                 }
             } catch (error) {
-                alert('Không thể kết nối máy chủ!');
+                hghAlert('Không thể kết nối máy chủ!', 'error');
             }
         }
 
@@ -420,18 +421,19 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    alert(result.message);
-                    toggleEditMode(false);
-                    if (result.avatar_url) {
-                        window.location.reload(); // Load lại trang để đổi ảnh
-                    } else {
-                        document.querySelector('.profile-sidebar h3').innerText = formData.get('username');
-                    }
+                    hghAlert(result.message, 'success').then(() => {
+                        toggleEditMode(false);
+                        if (result.avatar_url) {
+                            window.location.reload(); 
+                        } else {
+                            document.querySelector('.profile-sidebar h3').innerText = formData.get('username');
+                        }
+                    });
                 } else {
-                    alert(result.message || 'Cập nhật thất bại');
+                    hghAlert(result.message || 'Cập nhật thất bại', 'error');
                 }
             } catch (error) {
-                alert('Không thể kết nối máy chủ!');
+                hghAlert('Không thể kết nối máy chủ!', 'error');
             }
         }
 
@@ -449,7 +451,7 @@
             const confirmNewPassword = document.getElementById('confirmNewPassword').value;
 
             if (newPassword !== confirmNewPassword) {
-                alert('Mật khẩu xác nhận không khớp!');
+                hghAlert('Mật khẩu xác nhận không khớp!', 'warning');
                 return;
             }
 
@@ -470,17 +472,18 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    alert(result.message);
-                    closeChangePasswordModal();
+                    hghAlert(result.message, 'success').then(() => {
+                        closeChangePasswordModal();
+                    });
                 } else {
                     let errorMsg = result.message || 'Đổi mật khẩu thất bại';
                     if (result.errors) {
                         errorMsg += ": " + Object.values(result.errors).flat().join(', ');
                     }
-                    alert(errorMsg);
+                    hghAlert(errorMsg, 'error');
                 }
             } catch (error) {
-                alert('Không thể kết nối máy chủ!');
+                hghAlert('Không thể kết nối máy chủ!', 'error');
             }
         }
     </script>

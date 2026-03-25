@@ -296,18 +296,19 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    alert(result.message);
-                    if (result.role === 'admin') {
-                        window.location.href = "{{ route('admin.menu_management') }}";
-                    } else {
-                        window.location.href = "{{ url('/') }}";
-                    }
+                    hghAlert(result.message, 'success').then(() => {
+                        if (result.role === 'admin') {
+                            window.location.href = "{{ route('admin.menu_management') }}";
+                        } else {
+                            window.location.href = "{{ url('/') }}";
+                        }
+                    });
                 } else {
-                    alert(result.message || 'Tên đăng nhập hoặc mật khẩu không đúng!');
+                    hghAlert(result.message || 'Tên đăng nhập hoặc mật khẩu không đúng!', 'error');
                 }
             } catch (error) {
                 console.error('Lỗi kết nối:', error);
-                alert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!');
+                hghAlert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
             }
         }
         
@@ -319,7 +320,7 @@
             const confirmPass = document.getElementById('regConfirmPassword').value;
 
             if (pass !== confirmPass) {
-                alert('Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại!');
+                hghAlert('Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại!', 'warning');
                 return;
             }
 
@@ -342,18 +343,19 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    alert('Đăng ký thành công! Chuyển hướng về trang chủ...');
-                    window.location.href = "{{ url('/') }}";
+                    hghAlert('Đăng ký thành công! Chuyển hướng về trang chủ...', 'success').then(() => {
+                        window.location.href = "{{ url('/') }}";
+                    });
                 } else {
                     let errorMsg = result.message || 'Đăng ký thất bại';
                     if (result.errors) {
                         errorMsg += ": " + Object.values(result.errors).flat().join(', ');
                     }
-                    alert(errorMsg);
+                    hghAlert(errorMsg, 'error');
                 }
             } catch (error) {
                 console.error('Lỗi kết nối:', error);
-                alert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!');
+                hghAlert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
             }
         }
         

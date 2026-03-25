@@ -178,7 +178,10 @@
 
     function submitOrder() {
         let qty = parseInt(qtyInput.value);
-        if (isNaN(qty) || qty < 1 || qty > 10) { alert("Số lượng 1-10!"); return; }
+        if (isNaN(qty) || qty < 1 || qty > 10) { 
+            hghAlert("Số lượng 1-10!", "warning"); 
+            return; 
+        }
 
         fetch('/add-to-cart', {
             method: 'POST',
@@ -195,7 +198,7 @@
         })
         .then(res => res.json())
         .then(() => {
-            alert(`Đã thêm ${qty} ${currentSelectedDish.name}!`);
+            hghAlert(`Đã thêm ${qty} ${currentSelectedDish.name}!`, "success");
             closeModal();
         });
     }

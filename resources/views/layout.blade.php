@@ -264,15 +264,46 @@
         @yield('content')
     </main>
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script>
+        // Global helper for consistent alert branding
+        function hghAlert(message, icon = 'info') {
+            return Swal.fire({
+                title: 'NHÀ HÀNG HGH',
+                text: message,
+                icon: icon,
+                confirmButtonColor: '#C0392B',
+                confirmButtonText: 'Đồng ý'
+            });
+        }
+        // Global confirm helper
+        function hghConfirm(message) {
+            return Swal.fire({
+                title: 'Xác nhận',
+                text: message,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#C0392B',
+                cancelButtonColor: '#aaa',
+                confirmButtonText: 'Đồng ý',
+                cancelButtonText: 'Hủy bỏ'
+            });
+        }
+    </script>
+
     @if(session('success'))
         <script>
-            alert("{{ session('success') }}");
+            document.addEventListener('DOMContentLoaded', function() {
+                hghAlert("{{ session('success') }}", 'success');
+            });
         </script>
     @endif
 
     @if(session('error'))
         <script>
-            alert("{{ session('error') }}");
+            document.addEventListener('DOMContentLoaded', function() {
+                hghAlert("{{ session('error') }}", 'error');
+            });
         </script>
     @endif
 

@@ -72,7 +72,18 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
+        function hghAlert(message, icon = 'info') {
+            return Swal.fire({
+                title: 'NHÀ HÀNG HGH',
+                text: message,
+                icon: icon,
+                confirmButtonColor: '#C0392B',
+                confirmButtonText: 'Đồng ý'
+            });
+        }
+
         function showMsg(text, type = 'error') {
             const msg = document.getElementById('msg');
             msg.innerText = text;
@@ -145,8 +156,9 @@
 
                 const data = await res.json();
                 if(res.ok && data.success) {
-                    alert('Đổi mật khẩu thành công!');
-                    window.location.href = "{{ route('login') }}";
+                    hghAlert('Đổi mật khẩu thành công!', 'success').then(() => {
+                        window.location.href = "{{ route('login') }}";
+                    });
                 } else {
                     showMsg(data.message || 'Lỗi xử lý!');
                 }

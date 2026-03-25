@@ -487,8 +487,11 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    if (data.success) { alert(data.message); location.reload(); }
-                    else alert('Lỗi: ' + data.message);
+                    if (data.success) {
+                        hghAlert(data.message, 'success').then(() => location.reload());
+                    } else {
+                        hghAlert('Lỗi: ' + data.message, 'error');
+                    }
                 });
             };
 
@@ -526,27 +529,35 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    if (data.success) { alert(data.message); location.reload(); }
-                    else alert('Lỗi: ' + data.message);
+                    if (data.success) {
+                        hghAlert(data.message, 'success').then(() => location.reload());
+                    } else {
+                        hghAlert('Lỗi: ' + data.message, 'error');
+                    }
                 });
             };
 
             // --- DELETE DISH LOGIC ---
             window.deleteDish = (id, name) => {
-                if (confirm(`Bạn có chắc chắn muốn xóa món "${name}" không? Hành động này không thể hoàn tác!`)) {
-                    fetch(`/admin/delete-dish/${id}`, {
-                        method: 'POST',
-                        headers: { 
-                            'X-CSRF-TOKEN': '{{ csrf_token() }}',
-                            'Content-Type': 'application/json'
-                        }
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.success) { alert(data.message); location.reload(); }
-                        else alert('Lỗi: ' + data.message);
-                    });
-                }
+                hghConfirm(`Bạn có chắc chắn muốn xóa món "${name}" không? Hành động này không thể hoàn tác!`).then((result) => {
+                    if (result.isConfirmed) {
+                        fetch(`/admin/delete-dish/${id}`, {
+                            method: 'POST',
+                            headers: { 
+                                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                                'Content-Type': 'application/json'
+                            }
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                hghAlert(data.message, 'success').then(() => location.reload());
+                            } else {
+                                hghAlert('Lỗi: ' + data.message, 'error');
+                            }
+                        });
+                    }
+                });
             };
 
             // --- PROTECTION AGAINST ACCIDENTAL CLOSE ---

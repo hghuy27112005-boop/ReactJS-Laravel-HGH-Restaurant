@@ -341,7 +341,7 @@
 
             <div style="display:flex; justify-content:space-between; margin-top:20px;">
                 <button class="btn-action" style="background:#eee; color:#333;" onclick="goToStep(4)"><i class="fas fa-arrow-left"></i> Quay lại</button>
-                <button class="btn-action" style="background:#C0392B;" onclick="saveBooking()">Xác Nhận Đặt Bàn <i class="fas fa-check"></i></button>
+                <button class="btn-action" style="background:#C0392B;" onclick="saveBooking()">Xác nhận thông tin <i class="fas fa-check"></i></button>
             </div>
         </div>
     </div>
@@ -545,7 +545,7 @@
         if (bookingData.currentStep === 1) {
             // Validate step 1: totalTables selected
             if (bookingData.totalTables === 0) {
-                alert('Vui lòng chọn số lượng bàn!');
+                hghAlert('Vui lòng chọn số lượng bàn!', 'warning');
                 return;
             }
             goToStep(2);
@@ -553,21 +553,21 @@
             // Validate step 2: tables distributed
             const total = bookingData.types.type5 + bookingData.types.type10 + bookingData.types.type20;
             if (total !== bookingData.totalTables) {
-                alert(`Vui lòng chọn đúng ${bookingData.totalTables} bàn!`);
+                hghAlert(`Vui lòng chọn đúng ${bookingData.totalTables} bàn!`, 'warning');
                 return;
             }
             goToStep(3);
         } else if (bookingData.currentStep === 3) {
             // Validate step 3: tables selected
             if (bookingData.selectedTables.length !== bookingData.totalTables) {
-                alert(`Vui lòng chọn ${bookingData.totalTables} bàn!`);
+                hghAlert(`Vui lòng chọn ${bookingData.totalTables} bàn!`, 'warning');
                 return;
             }
             goToStep(4);
         } else if (bookingData.currentStep === 4) {
             // Validate step 4: date and time
             if (!bookingData.date || !bookingData.startTime || !bookingData.endTime) {
-                alert('Vui lòng điền đầy đủ ngày giờ!');
+                hghAlert('Vui lòng điền đầy đủ ngày giờ!', 'warning');
                 return;
             }
             goToStep(5);
@@ -606,7 +606,7 @@
         const total = bookingData.types.type5 + bookingData.types.type10 + bookingData.types.type20;
         
         if (newQty > bookingData.totalTables - (total - bookingData.types[type])) {
-            alert(`Chỉ có thể chọn tối đa ${bookingData.totalTables} bàn!`);
+            hghAlert(`Chỉ có thể chọn tối đa ${bookingData.totalTables} bàn!`, 'warning');
             return;
         }
         
@@ -641,7 +641,7 @@
                 bookingData.selectedTables.push(tableNum);
                 bookingData.selectedTables.sort((a, b) => a - b);
             } else {
-                alert(`Chỉ có thể chọn ${bookingData.totalTables} bàn!`);
+                hghAlert(`Chỉ có thể chọn ${bookingData.totalTables} bàn!`, 'warning');
                 return;
             }
         }
@@ -704,32 +704,34 @@
     }
 
     async function saveBooking() {
-        if (!confirm('Xác nhận đặt bàn?')) return;
-        
-        // Check overlap
-        const noOverlap = await checkMultipleTableOverlap();
-        if (!noOverlap) {
-            alert('Có bàn đã được đặt trong khung giờ này!');
-            return;
-        }
-        
-        // Update session with booking data
-        const tableNumbersStr = bookingData.selectedTables.join(',');
-        
-        await fetch("/save-booking", {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token },
-            body: JSON.stringify({
-                table_numbers: tableNumbersStr,
-                start_date: bookingData.date,
-                start_time: bookingData.startTime,
-                end_time: bookingData.endTime,
-                types: bookingData.types
-            })
+        hghConfirm('Xác nhận đặt bàn?').then(async (result) => {
+            if (!result.isConfirmed) return;
+            
+            // Check overlap
+            const noOverlap = await checkMultipleTableOverlap();
+            if (!noOverlap) {
+                hghAlert('Có bàn đã được đặt trong khung giờ này!', 'error');
+                return;
+            }
+            
+            // Update session with booking data
+            const tableNumbersStr = bookingData.selectedTables.join(',');
+            
+            await fetch("/save-booking", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token },
+                body: JSON.stringify({
+                    table_numbers: tableNumbersStr,
+                    start_date: bookingData.date,
+                    start_time: bookingData.startTime,
+                    end_time: bookingData.endTime,
+                    types: bookingData.types
+                })
+            });
+            
+            closeModal('bookingModal');
+            location.reload();
         });
-        
-        closeModal('bookingModal');
-        location.reload();
     }
 
     async function updateQty(type) {
@@ -745,7 +747,7 @@
             body: JSON.stringify({ quantities: updates })
         });
         if (res.ok) location.reload();
-        else alert("Lỗi cập nhật!");
+        else hghAlert("Lỗi cập nhật!", "error");
     }
 
     let bookingData = {
@@ -834,11 +836,11 @@
     function validateStep2() {
         const sum = Object.values(bookingData.types).reduce((a,b) => a+b, 0);
         if(sum <= 0) {
-            alert("Vui lòng chọn ít nhất 1 bàn!");
+            hghAlert("Vui lòng chọn ít nhất 1 bàn!", "warning");
             return;
         }
         if(sum > bookingData.totalTables) {
-            alert("Tổng số bàn (" + sum + ") vượt quá giới hạn tối đa (" + bookingData.totalTables + ")!");
+            hghAlert("Tổng số bàn (" + sum + ") vượt quá giới hạn tối đa (" + bookingData.totalTables + ")!", "error");
             return;
         }
         goToStep(3);
@@ -887,7 +889,7 @@
     function selectTypeTable(typeKey, num, el, quota, typeVal) {
         const alreadyInOtherType = bookingData.selectedTables.some(st => st.tableNumber === num && st.type !== typeVal);
         if(alreadyInOtherType) {
-            alert("Bàn " + num + " đã thuộc loại khác!");
+            hghAlert("Bàn " + num + " đã thuộc loại khác!", "warning");
             return;
         }
 
@@ -901,7 +903,7 @@
             // Select new
             const currentSelectedInType = bookingData.selectedTables.filter(st => st.type === typeVal).length;
             if(currentSelectedInType >= quota) {
-                alert(`Bạn chỉ được chọn tối đa ${quota} bàn loại ${typeKey === 'type5' ? 'nhỏ' : (typeKey === 'type10' ? 'vừa' : 'lớn')}`);
+                hghAlert(`Bạn chỉ được chọn tối đa ${quota} bàn loại ${typeKey === 'type5' ? 'nhỏ' : (typeKey === 'type10' ? 'vừa' : 'lớn')}`, 'warning');
                 return;
             }
             bookingData.selectedTables.push({ tableNumber: num, type: typeVal });
@@ -912,7 +914,7 @@
     function validateStep3() {
         const totalRequired = Object.values(bookingData.types).reduce((a,b) => a+b, 0);
         if(bookingData.selectedTables.length < totalRequired) {
-            alert("Vui lòng chọn đủ " + totalRequired + " bàn cụ thể!");
+            hghAlert("Vui lòng chọn đủ " + totalRequired + " bàn cụ thể!", "warning");
             return;
         }
         goToStep(4);
@@ -1033,7 +1035,7 @@
             location.reload();
         } else {
             const err = await res.json();
-            alert(err.message || "Lỗi đặt bàn!");
+            hghAlert(err.message || "Lỗi đặt bàn!", "error");
         }
     }
 
@@ -1048,30 +1050,32 @@
     }
 
     async function handleConfirm(btn, type) {
-        if(!confirm("Chốt đơn?")) return;
-        btn.disabled = true;
-        btn.innerText = "Chờ thanh toán...";
-        
-        const data = {
-            order_type: type,
-            address: type === 'mang-ve' ? document.getElementById('address-mang-ve').value : '',
-            table_number: type === 'dat-ban' ? document.getElementById('table-number').value : null,
-            status: false
-        };
-        
-        const res = await fetch("/checkout", { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token }, 
-            body: JSON.stringify(data) 
+        hghConfirm("Chốt đơn?").then(async (result) => {
+            if (!result.isConfirmed) return;
+            btn.disabled = true;
+            btn.innerText = "Chờ thanh toán...";
+            
+            const data = {
+                order_type: type,
+                address: type === 'mang-ve' ? document.getElementById('address-mang-ve').value : '',
+                table_number: type === 'dat-ban' ? document.getElementById('table-number').value : null,
+                status: false
+            };
+            
+            const res = await fetch("/checkout", { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': sessionVars.token }, 
+                body: JSON.stringify(data) 
+            });
+            
+            if(res.ok) location.reload();
+            else { 
+                const err = await res.json();
+                hghAlert("Lỗi: " + (err.message || "Không thể lưu đơn"), "error"); 
+                btn.disabled = false; 
+                btn.innerText = "Xác Nhận";
+            }
         });
-        
-        if(res.ok) location.reload();
-        else { 
-            const err = await res.json();
-            alert("Lỗi: " + (err.message || "Không thể lưu đơn")); 
-            btn.disabled = false; 
-            btn.innerText = "Xác Nhận";
-        }
     }
 
 
@@ -1079,7 +1083,7 @@
         currentPayType = type;
         const billCode = (type === 'mang-ve') ? sessionVars.billMangVe : sessionVars.billDatBan;
         if (!billCode) {
-            alert("Bạn chưa có mã hóa đơn cho đơn này. Vui lòng bấm 'Xác Nhận' trước khi thanh toán.");
+            hghAlert("Bạn chưa có mã hóa đơn cho đơn này. Vui lòng bấm 'Xác Nhận' trước khi thanh toán.", "warning");
             return;
         }
         document.getElementById('pay-bill-code-display').innerText = billCode;
@@ -1131,19 +1135,20 @@
                         if (t) errMsg = t;
                     } catch (_) {}
                 }
-                alert("Lỗi: " + errMsg);
+                hghAlert("Lỗi: " + errMsg, "error").then(() => {
+                    // Nếu là lỗi trùng lịch (422), reload để hiện lại giỏ hàng đã khôi phục
+                    if (res.status === 422) {
+                        location.reload();
+                    }
+                });
                 
-                // Nếu là lỗi trùng lịch (422), reload để hiện lại giỏ hàng đã khôi phục
-                if (res.status === 422) {
-                    location.reload();
-                    return;
+                if (res.status !== 422) {
+                    btn.disabled = false;
+                    cancelBtn.disabled = false;
+                    cancelBtn.style.opacity = '1';
+                    cancelBtn.style.cursor = 'pointer';
+                    btn.innerText = "Xác Nhận";
                 }
-
-                btn.disabled = false;
-                cancelBtn.disabled = false;
-                cancelBtn.style.opacity = '1';
-                cancelBtn.style.cursor = 'pointer';
-                btn.innerText = "Xác Nhận";
                 return;
             }
 
@@ -1161,7 +1166,7 @@
             }
         } catch (e) {
             console.error("Payment Error:", e);
-            alert("Lỗi kết nối server hoặc lỗi JavaScript: " + e.message);
+            hghAlert("Lỗi kết nối server hoặc lỗi JavaScript: " + e.message, "error");
             btn.disabled = false;
             cancelBtn.disabled = false;
             btn.innerText = "Xác Nhận";
@@ -1192,7 +1197,7 @@
             if (!billEl || !confirmBtn) return;
 
             if (!billCode) {
-                alert("Bạn chưa có mã hóa đơn cho đơn này. Vui lòng bấm 'Xác Nhận' trước khi thanh toán.");
+                hghAlert("Bạn chưa có mã hóa đơn cho đơn này. Vui lòng bấm 'Xác Nhận' trước khi thanh toán.", "warning");
                 return;
             }
 
