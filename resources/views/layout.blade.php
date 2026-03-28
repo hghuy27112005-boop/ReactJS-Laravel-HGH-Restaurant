@@ -174,7 +174,8 @@
             color: #FFD700;
         }
 
-        .footer-left p, .social-links a {
+        .footer-left p,
+        .social-links a {
             display: flex;
             align-items: center;
             margin: 8px 0;
@@ -182,7 +183,8 @@
         }
 
         .footer-icon {
-            width: 30px; /* Fixed width to align text start */
+            width: 30px;
+            /* Fixed width to align text start */
             display: flex;
             justify-content: center;
             align-items: center;
@@ -200,6 +202,11 @@
 
         .main-footer i.footer-icon {
             font-size: 1.1em;
+        }
+
+        /* Ensure SweetAlert2 is always on top of modals */
+        .swal2-container {
+            z-index: 3000 !important;
         }
     </style>
 </head>
@@ -246,7 +253,9 @@
                     <a href="{{ route('profile') }}" class="avatar-circle"
                         title="Trang cá nhân của {{ Auth::user()->username }}">
                         @if(Auth::user()->avatar_url)
-                            <img src="{{ Auth::user()->avatar_url }}" alt="Avatar" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" referrerpolicy="no-referrer">
+                            <img src="{{ Auth::user()->avatar_url }}" alt="Avatar"
+                                style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;"
+                                referrerpolicy="no-referrer">
                         @else
                             <i class="fas fa-user"></i>
                         @endif
@@ -272,6 +281,7 @@
                 title: 'NHÀ HÀNG HGH',
                 text: message,
                 icon: icon,
+                showCloseButton: true, // Thêm nút X cho user dễ đóng
                 confirmButtonColor: '#C0392B',
                 confirmButtonText: 'Đồng ý'
             });
@@ -293,7 +303,7 @@
 
     @if(session('success'))
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('DOMContentLoaded', function () {
                 hghAlert("{{ session('success') }}", 'success');
             });
         </script>
@@ -301,7 +311,7 @@
 
     @if(session('error'))
         <script>
-            document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('DOMContentLoaded', function () {
                 hghAlert("{{ session('error') }}", 'error');
             });
         </script>
