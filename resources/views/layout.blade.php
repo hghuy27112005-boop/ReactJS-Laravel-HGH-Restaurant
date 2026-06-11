@@ -9,6 +9,10 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
+    {{-- Vite: load React Hot Refresh + bundle CSS/JS --}}
+    @viteReactRefresh
+    @vite(['resources/css/app.css', 'resources/js/app.jsx'])
+
     <link rel="shortcut icon" type="image/x-icon" href="{{ asset('hgh-favicon.ico') }}?v=1">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('hgh-32x32.png') }}?v=1">
     <link rel="icon" type="image/png" sizes="16x16" href="{{ asset('hgh-16x16.png') }}?v=1">
@@ -272,6 +276,8 @@
     <main>
         @yield('content')
     </main>
+
+    @stack('scripts')
 
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>

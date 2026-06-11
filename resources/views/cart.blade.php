@@ -791,7 +791,8 @@
 
                 <label>Ngày đến (trong vòng 60 ngày):</label>
                 <input type="date" id="wizard-date" class="modal-input" oninput="checkOverlapDebounced()"
-                    value="{{ session('start_date') ?? date('Y-m-d') }}" min="{{ date('Y-m-d') }}" max="{{ date('Y-m-d', strtotime('+60 days')) }}">
+                    value="{{ session('start_date') ?? date('Y-m-d') }}" min="{{ date('Y-m-d') }}"
+                    max="{{ date('Y-m-d', strtotime('+60 days')) }}">
 
                 <div style="margin-top:15px; display:flex; gap:20px;">
                     <div>
@@ -1190,16 +1191,16 @@
 
         function renderStep5() {
             const review = `
-                                    <div style="margin-bottom: 15px;">
-                                        <p><strong>Số bàn:</strong> ${bookingData.totalTables}</p>
-                                        <p><strong>Phân bố:</strong> 5 người: ${bookingData.types.type5}, 10 người: ${bookingData.types.type10}, 20 người: ${bookingData.types.type20}</p>
-                                        <p><strong>Bàn đặt:</strong> ${bookingData.selectedTables.join(', ')}</p>
-                                    </div>
-                                    <div>
-                                        <p><strong>Ngày:</strong> ${bookingData.date}</p>
-                                        <p><strong>Giờ:</strong> ${bookingData.startTime} - ${bookingData.endTime}</p>
-                                    </div>
-                                `;
+                                        <div style="margin-bottom: 15px;">
+                                            <p><strong>Số bàn:</strong> ${bookingData.totalTables}</p>
+                                            <p><strong>Phân bố:</strong> 5 người: ${bookingData.types.type5}, 10 người: ${bookingData.types.type10}, 20 người: ${bookingData.types.type20}</p>
+                                            <p><strong>Bàn đặt:</strong> ${bookingData.selectedTables.join(', ')}</p>
+                                        </div>
+                                        <div>
+                                            <p><strong>Ngày:</strong> ${bookingData.date}</p>
+                                            <p><strong>Giờ:</strong> ${bookingData.startTime} - ${bookingData.endTime}</p>
+                                        </div>
+                                    `;
             document.getElementById('review-content').innerHTML = review;
         }
 
@@ -1732,3 +1733,5 @@
         })();
     </script>
 @endsection
+
+

@@ -46,7 +46,7 @@
             padding: 30px;
             display: none;
         }
-        
+
         .tab-content.active {
             display: block;
         }
@@ -93,7 +93,7 @@
         .btn-primary.large-btn:hover {
             background-color: #A93226;
         }
-        
+
         .forgot-password {
             background: none;
             border: none;
@@ -103,7 +103,7 @@
             font-size: 14px;
             cursor: pointer;
         }
-        
+
         .social-login-divider {
             text-align: center;
             margin: 30px 0;
@@ -111,6 +111,7 @@
             color: #999;
             font-size: 14px;
         }
+
         .social-login-divider::before,
         .social-login-divider::after {
             content: "";
@@ -120,9 +121,11 @@
             height: 1px;
             background: #eee;
         }
+
         .social-login-divider::before {
             left: 0;
         }
+
         .social-login-divider::after {
             right: 0;
         }
@@ -131,7 +134,7 @@
             display: flex;
             gap: 10px;
         }
-        
+
         .social-btn {
             flex-grow: 1;
             padding: 12px;
@@ -146,6 +149,7 @@
             justify-content: center;
             gap: 8px;
         }
+
         .social-btn:hover {
             opacity: 0.9;
         }
@@ -165,6 +169,7 @@
             margin-top: 20px;
             font-size: 15px;
         }
+
         .switch-link button {
             background: none;
             border: none;
@@ -185,7 +190,7 @@
                     <i class="fas fa-user-plus"></i> Đăng ký
                 </button>
             </div>
-            
+
             <div id="login" class="tab-content active">
                 <form id="loginForm" onsubmit="event.preventDefault(); handleLogin();">
                     <label for="loginUsername">Tên người dùng / Email (*):</label>
@@ -197,7 +202,7 @@
                     <button type="button" class="forgot-password" onclick="location.href='{{ route('password.request') }}'">
                         Quên mật khẩu?
                     </button>
-                    
+
                     <button type="submit" class="btn-primary large-btn" id="loginBtn">
                         Đăng nhập
                     </button>
@@ -206,7 +211,7 @@
                 <div class="switch-link">
                     Chưa có tài khoản? <button onclick="switchToTab('register')">Đăng ký ngay!</button>
                 </div>
-                
+
                 <div class="social-login-divider">
                     Hoặc đăng nhập với
                 </div>
@@ -221,10 +226,12 @@
             <div id="register" class="tab-content">
                 <form id="registerForm" onsubmit="event.preventDefault(); handleRegister();">
                     <label for="regUsername">Tên người dùng (*):</label>
-                    <input type="text" id="regUsername" name="username" required maxlength="20" placeholder="Nhập tên người dùng (tối đa 20 ký tự)">
-                    
+                    <input type="text" id="regUsername" name="username" required maxlength="20"
+                        placeholder="Nhập tên người dùng (tối đa 20 ký tự)">
+
                     <label for="regEmail">Email:</label>
-                    <input type="email" id="regEmail" name="email" maxlength="50" placeholder="ví dụ: a@gmail.com (tối đa 50 ký tự)">
+                    <input type="email" id="regEmail" name="email" maxlength="50"
+                        placeholder="ví dụ: a@gmail.com (tối đa 50 ký tự)">
 
                     <label for="regPhone">Số điện thoại:</label>
                     <input type="text" id="regPhone" name="phone" maxlength="10" placeholder="Nhập số điện thoại (10 số)">
@@ -239,7 +246,7 @@
                         Đăng ký
                     </button>
                 </form>
-                
+
                 <div class="switch-link">
                     Đã có tài khoản? <button onclick="switchToTab('login')">Đăng nhập ngay!</button>
                 </div>
@@ -248,17 +255,17 @@
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             setupTabSwitching();
         });
-        
+
         function switchToTab(targetId) {
             const tabs = document.querySelectorAll('.tab-btn');
             const contents = document.querySelectorAll('.tab-content');
-            
+
             tabs.forEach(t => t.classList.remove('active'));
             contents.forEach(c => c.classList.remove('active'));
-            
+
             const targetTab = document.querySelector(`.tab-btn[data-tab="${targetId}"]`);
             if (targetTab) {
                 targetTab.classList.add('active');
@@ -274,7 +281,7 @@
                 });
             });
         }
-        
+
         async function handleLogin() {
             const username = document.getElementById('loginUsername').value;
             const password = document.getElementById('loginPassword').value;
@@ -311,7 +318,7 @@
                 hghAlert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
             }
         }
-        
+
         async function handleRegister() {
             const username = document.getElementById('regUsername').value;
             const email = document.getElementById('regEmail').value;
@@ -358,7 +365,7 @@
                 hghAlert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
             }
         }
-        
+
 
     </script>
 @endsection

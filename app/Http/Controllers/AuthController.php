@@ -95,8 +95,7 @@ class AuthController extends Controller
                 'message' => 'Đăng ký thành công!',
                 'role' => $user->role
             ]);
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
                 'message' => 'Lỗi hệ thống: ' . $e->getMessage()
@@ -290,8 +289,7 @@ class AuthController extends Controller
             $googleUser = Socialite::driver('google')
                 ->setHttpClient(new \GuzzleHttp\Client(['verify' => false]))
                 ->user();
-        }
-        catch (\Exception $e) {
+        } catch (\Exception $e) {
             return redirect()->route('login')->with('error', 'Lỗi: ' . $e->getMessage());
         }
 
@@ -304,8 +302,7 @@ class AuthController extends Controller
                 $user->update(['avatar_url' => $googleUser->avatar]);
             }
             Auth::login($user);
-        }
-        else {
+        } else {
             // Chưa có account, tạo mới
             // Username: lấy từ email (phần trước @) và giới hạn 20 ký tự
             $username = explode('@', $googleUser->email)[0];

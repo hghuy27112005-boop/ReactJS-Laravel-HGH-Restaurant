@@ -380,7 +380,7 @@ class CartController extends Controller
 
                         // KHÔNG đổi status bill thành cancelled, cứ để pending để edit.
                         // Nhưng cần commit transaction để lưu lại các thay đổi tiềm năng khác
-                        DB::commit(); 
+                        DB::commit();
 
                         return response()->json([
                             'status' => 'error',

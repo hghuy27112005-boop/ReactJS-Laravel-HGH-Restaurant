@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Bill;
+use Illuminate\Http\Request;
+
+class BillController extends Controller
+{
+    /**
+     * Get all bills (admin view)
+     */
+    public function index(Request $request)
+    {
+        $query = Bill::with('user', 'orders.dish', 'delivery', 'bookingTable');
+
+        // Filter by date
+        if ($request->has('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->has('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        // Filter by status
+        if ($request->has('status')) {
+            $query->where('status', $request->status);
+        }
+
+        // Filter by order type
+        if ($request->has('order_type')) {
+            $query->where('order_type', $request->order_type);
+        }
+
+        // Search by bill code or user
+        if ($request->has('search')) {
+            $query->where(function ($q) use ($request) {
+                $q->where('bill_code', 'like', '%' . $request->search . '%')
+                    ->orWhereHas('user', function ($subq) use ($request) {
+                        $subq->where('name', 'like', '%' . $request->search . '%');
+                    });
+            });
+        }
+
+        $bills = $query->orderByDesc('created_at')
+            ->paginate($request->get('per_page', 20));
+
+        return response()->json([
+            'data' => $bills->items(),
+            'pagination' => [
+                'total' => $bills->total(),
+                'per_page' => $bills->perPage(),
+                'current_page' => $bills->currentPage(),
+                'last_page' => $bills->lastPage(),
+            ],
+        ]);
+    }
+
+    /**
+     * Update bill (admin)
+     */
+    public function update(Request $request, Bill $bill)
+    {
+        $validated = $request->validate([
+            'status' => 'in:pending,unpaid,completed,cancelled',
+        ]);
+
+        $bill->update($validated);
+
+        return response()->json([
+            'data' => $bill,
+            'message' => 'Bill updated successfully',
+        ]);
+    }
+}

@@ -36,6 +36,130 @@ class Dish extends Model
 
     public function type()
     {
-        return $this->belongsTo(DishType::class , 'type_id', 'type_id');
+        return $this->belongsTo(DishType::class, 'type_id', 'type_id');
+    }
+
+    public function orders()
+    {
+        return $this->hasMany(Order::class, 'dish_id', 'dish_id');
+    }
+
+    public function stocks()
+    {
+        return $this->hasMany(Stock::class, 'dish_id', 'dish_id');
+    }
+
+    // ============================================
+    // SCOPES
+    // ============================================
+
+    public function scopeBestseller($query)
+    {
+        return $query->where('is_bestseller', true);
+    }
+
+    public function scopeByType($query, $typeId)
+    {
+        return $query->where('type_id', $typeId);
+    }
+
+    // ============================================
+    // HELPER METHODS
+    // ============================================
+
+    /**
+     * Get formatted price
+     */
+    public function getFormattedPrice()
+    {
+        return number_format($this->price, 0, ',', '.') . ' VND';
+    }
+
+    /**
+     * Check if is bestseller
+     */
+    public function isBestseller()
+    {
+        return $this->is_bestseller === true;
+    }
+
+    /**
+     * Apply sale off discount
+     */
+    public function applyDiscount($discountPercent)
+    {
+        return $this->price * (1 - $discountPercent / 100);
+    }
+
+    /**
+     * Get current stock quantity
+     */
+    public function getCurrentStock()
+    {
+        $stock = Stock::where('dish_id', $this->dish_id)
+            ->where('status', 'active')
+            ->first();
+        
+        return $stock ? $stock->quantity_left : 0;
+    }
+
+    /**
+     * Get stock status
+     */
+    public function getStockStatus()
+    {
+        $quantity = $this->getCurrentStock();
+
+        if ($quantity <= 0) {
+            return 'out_of_stock';
+        } elseif ($quantity <= 15) {
+            return 'low_stock';
+        }
+
+        return 'in_stock';
+    }
+
+    /**
+     * Check if available
+     */
+    public function isAvailable()
+    {
+        return $this->getStockStatus() !== 'out_of_stock';
+    }
+
+    /**
+     * Get similar dishes by type
+     */
+    public function getSimilarDishes($limit = 6)
+    {
+        return Dish::where('type_id', $this->type_id)
+            ->where('dish_id', '!=', $this->dish_id)
+            ->limit($limit)
+            ->get();
+    }
+
+    /**
+     * Get order count
+     */
+    public function getOrderCount()
+    {
+        return $this->orders()->count();
+    }
+
+    /**
+     * Get total revenue from this dish
+     */
+    public function getTotalRevenue()
+    {
+        return $this->orders()
+            ->sum(\DB::raw('quantity * price_at_order'));
+    }
+
+    /**
+     * Get average rating/popularity
+     */
+    public function getPopularityScore()
+    {
+        return min(100, ($this->getOrderCount() / 10) * 100);
     }
 }
