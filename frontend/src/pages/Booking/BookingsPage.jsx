@@ -1,6 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { bookingTableAPI } from '../../services/api';
+import { bookingService, extractListData } from '../../services/api';
 import { Loading, ErrorMessage, SuccessMessage, Button, Card, Badge, EmptyState, Modal } from '../../components/Shared';
+
+const getBillStatusLabel = (bill) => {
+    if (bill.status === 'cancelled') return 'Đã hủy';
+    if (bill.is_paid) return 'Đã thanh toán';
+    if (bill.status === 'completed') return 'Hoàn thành';
+    return 'Chờ thanh toán';
+};
+
+const getBillStatusVariant = (bill) => {
+    if (bill.status === 'cancelled') return 'danger';
+    if (bill.is_paid || bill.status === 'completed') return 'success';
+    return 'warning';
+};
 
 const BookingsPage = () => {
     const [bookings, setBookings] = useState([]);
@@ -23,10 +36,12 @@ const BookingsPage = () => {
     const fetchBookings = async () => {
         try {
             setLoading(true);
+            setError(null);
             const response = await bookingService.getBookings();
-            setBookings(response.data.data);
+            setBookings(extractListData(response));
         } catch (err) {
-            setError('Lỗi tải danh sách đặt bàn');
+            if (err.response?.status === 401) return;
+            setError(err.response?.data?.message || 'Không thể tải danh sách đặt bàn. Vui lòng thử lại.');
             console.error(err);
         } finally {
             setLoading(false);
@@ -139,40 +154,34 @@ const BookingsPage = () => {
                     <EmptyState
                         icon="📅"
                         title="Chưa có đặt bàn"
-                        description="Hãy đặt một bàn để trải nghiệm nhà hàng của chúng tôi"
-                        action={<Button onClick={() => setShowCreateModal(true)}>Đặt bàn ngay</Button>}
+                        description="Bạn chưa có đơn đặt bàn nào. Hãy chọn món tại Menu (hình thức Ăn tại quán) rồi hoàn tất tại trang Đặt Bàn."
+                        action={<Button onClick={() => window.location.href = '/menu'}>Xem Menu</Button>}
                     />
                 ) : (
                     <div className="space-y-4">
-                        {bookings.map(booking => (
-                            <Card key={booking.booking_id} title={`Bàn ${booking.table_number}`}>
+                        {bookings.map(bill => (
+                            <Card key={bill.id} title={`Mã hóa đơn: ${bill.bill_code}`}>
                                 <div className="grid md:grid-cols-3 gap-4">
                                     <div>
                                         <p className="text-sm text-gray-600">Ngày</p>
-                                        <p className="font-semibold">{new Date(booking.booking_date).toLocaleDateString('vi-VN')}</p>
+                                        <p className="font-semibold">{bill.booking_date ? new Date(bill.booking_date).toLocaleDateString('vi-VN') : '—'}</p>
                                     </div>
                                     <div>
                                         <p className="text-sm text-gray-600">Giờ</p>
-                                        <p className="font-semibold">{booking.arrival_time}</p>
+                                        <p className="font-semibold">{bill.arrival_time || '—'}{bill.finish_time ? ` - ${bill.finish_time}` : ''}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Số khách</p>
-                                        <p className="font-semibold">{booking.guest_count} người</p>
+                                        <p className="text-sm text-gray-600">Bàn</p>
+                                        <p className="font-semibold">{bill.table_number || '—'}</p>
                                     </div>
                                 </div>
-                                <div className="mt-4 flex gap-2">
-                                    <Badge variant={booking.status === 'confirmed' ? 'success' : 'warning'}>
-                                        {booking.status === 'confirmed' ? '✓ Xác nhận' : '⏳ Chờ xác nhận'}
+                                <div className="mt-4 flex gap-2 items-center flex-wrap">
+                                    <Badge variant={getBillStatusVariant(bill)}>
+                                        {getBillStatusLabel(bill)}
                                     </Badge>
-                                    {booking.status !== 'cancelled' && (
-                                        <Button
-                                            variant="danger"
-                                            size="sm"
-                                            onClick={() => handleCancelBooking(booking.booking_id)}
-                                        >
-                                            Hủy
-                                        </Button>
-                                    )}
+                                    <span className="text-red-600 font-bold">
+                                        {Number(bill.total_amount || 0).toLocaleString('vi-VN')}đ
+                                    </span>
                                 </div>
                             </Card>
                         ))}

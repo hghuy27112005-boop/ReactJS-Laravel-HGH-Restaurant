@@ -183,7 +183,7 @@
             return; 
         }
 
-        fetch('/add-to-cart', {
+        fetch('{{ route('cart.add') }}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF_TOKEN },
             body: JSON.stringify({
@@ -196,10 +196,22 @@
                 _token: CSRF_TOKEN 
             })
         })
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) {
+                return res.json().then(err => { throw err; });
+            }
+            return res.json();
+        })
         .then(() => {
-            hghAlert(`Đã thêm ${qty} ${currentSelectedDish.name}!`, "success");
+            const orderType = document.getElementById("orderType").value;
+            const cartUrl = orderType === 'dat-ban' ? '{{ route('cart.booking') }}' : '{{ route('cart.order') }}';
+            hghAlert(`Đã thêm ${qty} ${currentSelectedDish.name}!`, "success").then(() => {
+                window.location.href = cartUrl;
+            });
             closeModal();
+        })
+        .catch(err => {
+            hghAlert(err.message || "Lỗi kết nối server!", "error");
         });
     }
 </script>

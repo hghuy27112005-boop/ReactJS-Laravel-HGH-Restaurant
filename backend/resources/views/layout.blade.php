@@ -232,6 +232,10 @@
                 @else
                     <a href="{{ url('/gioi-thieu') }}" class="{{ Request::is('gioi-thieu') ? 'active' : '' }}">Giới Thiệu</a>
                     <a href="{{ url('/menu') }}" class="{{ Request::is('menu*') ? 'active' : '' }}">Menu</a>
+                    <a href="{{ route('cart.order') }}"
+                        class="{{ Request::is('dat-hang') || Request::is('gio-hang') ? 'active' : '' }}">Đặt Hàng</a>
+                    <a href="{{ route('cart.booking') }}"
+                        class="{{ Request::is('dat-ban') ? 'active' : '' }}">Đặt Bàn</a>
                     <a href="{{ route('transaction_history') }}"
                         class="{{ Request::is('transaction-history') ? 'active' : '' }}">Lịch sử giao dịch</a>
                 @endif
@@ -251,8 +255,13 @@
                         <span class="admin-label">admin</span>
                     </a>
                 @else
-                    <a href="{{ url('/gio-hang') }}" class="action-btn {{ Request::is('gio-hang') ? 'active-cart' : '' }}">
-                        <i class="fas fa-shopping-cart"></i> Giỏ Hàng
+                    <a href="{{ route('cart.order') }}"
+                        class="action-btn {{ Request::is('dat-hang') || Request::is('gio-hang') ? 'active-cart' : '' }}">
+                        <i class="fas fa-shopping-bag"></i> Đặt Hàng
+                    </a>
+                    <a href="{{ route('cart.booking') }}"
+                        class="action-btn {{ Request::is('dat-ban') ? 'active-cart' : '' }}">
+                        <i class="fas fa-chair"></i> Đặt Bàn
                     </a>
                     <a href="{{ route('profile') }}" class="avatar-circle"
                         title="Trang cá nhân của {{ Auth::user()->username }}">

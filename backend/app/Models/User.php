@@ -46,12 +46,12 @@ class User extends Authenticatable
 
     public function bills()
     {
-        return $this->hasMany(Bill::class, 'user_id', 'id');
+        return $this->hasMany(Bill::class, 'user_id', 'user_id');
     }
 
     public function deliveries()
     {
-        return $this->hasMany(Delivery::class, 'user_id', 'id');
+        return $this->hasMany(Delivery::class, 'user_id', 'user_id');
     }
 
     public function points()

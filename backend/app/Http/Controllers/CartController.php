@@ -13,6 +13,21 @@ class CartController extends Controller
 {
     public function index()
     {
+        return redirect()->route('cart.order');
+    }
+
+    public function orderCart()
+    {
+        return $this->renderCartPage('mang-ve');
+    }
+
+    public function bookingCart()
+    {
+        return $this->renderCartPage('dat-ban');
+    }
+
+    private function renderCartPage(string $cartMode)
+    {
         $userId = auth()->id();
 
         // CỨU HỘ ĐƠN HÀNG KẸT: Tìm đơn hàng chưa thanh toán để nạp lại session
@@ -65,7 +80,8 @@ class CartController extends Controller
         }
 
         $cart = session()->get('cart', []);
-        return view('cart', compact('cart'));
+
+        return view('cart', compact('cart', 'cartMode'));
     }
 
     public function addToCart(Request $request)
@@ -610,5 +626,28 @@ class CartController extends Controller
                 'message' => 'Lỗi kiểm tra trùng lịch: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * JSON API: lịch sử đơn của user (dùng cho React SPA)
+     */
+    public function myBillsJson(Request $request)
+    {
+        $query = Bill::query()->where('user_id', auth()->id());
+
+        if ($request->filled('order_type')) {
+            $query->where('order_type', $request->order_type);
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        $bills = $query->with(['details.dish', 'bookings'])
+            ->orderByDesc('created_at')
+            ->limit(100)
+            ->get();
+
+        return response()->json(['data' => $bills]);
     }
 }

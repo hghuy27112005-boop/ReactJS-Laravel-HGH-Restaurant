@@ -64,6 +64,19 @@ export const billAPI = {
         axiosInstance.post(`/bills/${id}/payment`, paymentData),
 };
 
+// User order history (session cart / Blade checkout flow)
+export const myBillsAPI = {
+    getAll: (filters = {}) => axiosInstance.get('/my-bills', { params: filters }),
+};
+
+/** @returns {Array} list from API response */
+export const extractListData = (response) => {
+    const payload = response?.data;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload)) return payload;
+    return [];
+};
+
 // Orders API
 export const orderAPI = {
     create: (data) => axiosInstance.post('/orders', data),
@@ -169,6 +182,27 @@ export const adminAPI = {
         customers: (filters = {}) =>
             axiosInstance.get('/admin/statistics/customers', { params: filters }),
     },
+};
+
+// Aliases used by page components (defined after underlying APIs)
+export const billService = {
+    getBills: (filters) => myBillsAPI.getAll(filters),
+    storeBill: (data) => billAPI.create(data),
+    processPayment: (id, data) => billAPI.processPayment(id, data),
+};
+
+export const bookingService = {
+    getBookings: () => myBillsAPI.getAll({ order_type: 'dat-ban' }),
+    createBooking: (data) => bookingTableAPI.create(data),
+    updateBooking: (id, data) => bookingTableAPI.update(id, data),
+    deleteBooking: (id) => bookingTableAPI.delete(id),
+    cancelBooking: (id) => bookingTableAPI.delete(id),
+};
+
+export const deliveryService = {
+    getDeliveries: () => myBillsAPI.getAll({ order_type: 'mang-ve' }),
+    approveDelivery: (id) => deliveryAPI.approve(id),
+    startDelivery: (id) => deliveryAPI.startDelivery(id),
 };
 
 export default axiosInstance;

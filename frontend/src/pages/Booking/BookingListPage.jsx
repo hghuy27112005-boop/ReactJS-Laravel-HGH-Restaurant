@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { bookingTableAPI } from '../../services/api';
+import { bookingService, extractListData } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, Button, EmptyState } from '../../components/Shared';
-import BookingDetail from '../../components/BookingDetail';
 
 const BookingListPage = () => {
     const navigate = useNavigate();
@@ -10,8 +9,6 @@ const BookingListPage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all');
-    const [selectedBooking, setSelectedBooking] = useState(null);
-    const [showDetailModal, setShowDetailModal] = useState(false);
 
     useEffect(() => {
         fetchBookings();
@@ -20,10 +17,12 @@ const BookingListPage = () => {
     const fetchBookings = async () => {
         try {
             setLoading(true);
+            setError(null);
             const response = await bookingService.getBookings();
-            setBookings(response.data.data);
+            setBookings(extractListData(response));
         } catch (err) {
-            setError('Lỗi tải danh sách đặt bàn');
+            if (err.response?.status === 401) return;
+            setError(err.response?.data?.message || 'Không thể tải danh sách đặt bàn. Vui lòng thử lại.');
             console.error(err);
         } finally {
             setLoading(false);
@@ -34,45 +33,21 @@ const BookingListPage = () => {
         if (filter === 'all') return bookings;
         if (filter === 'upcoming') {
             return bookings.filter(b => {
+                if (!b.booking_date) return false;
                 const bookingDate = new Date(b.booking_date);
-                return bookingDate > new Date() && b.status !== 'cancelled';
+                return bookingDate >= new Date() && b.status !== 'cancelled';
             });
         }
         if (filter === 'past') {
             return bookings.filter(b => {
-                const bookingDate = new Date(b.booking_date);
-                return bookingDate < new Date();
+                if (!b.booking_date) return false;
+                return new Date(b.booking_date) < new Date();
             });
         }
         if (filter === 'cancelled') {
             return bookings.filter(b => b.status === 'cancelled');
         }
         return bookings;
-    };
-
-    const handleReschedule = async (bookingId, newDate, newTime) => {
-        try {
-            // Call API to reschedule
-            await bookingService.updateBooking(bookingId, {
-                booking_date: newDate,
-                arrival_time: newTime,
-            });
-            setError(null);
-            await fetchBookings();
-            setShowDetailModal(false);
-        } catch (err) {
-            setError('Lỗi đổi lịch');
-        }
-    };
-
-    const handleCancel = async (bookingId) => {
-        try {
-            await bookingService.cancelBooking(bookingId);
-            await fetchBookings();
-            setShowDetailModal(false);
-        } catch (err) {
-            setError('Lỗi hủy đặt bàn');
-        }
     };
 
     if (loading) return <Loading />;
@@ -84,7 +59,7 @@ const BookingListPage = () => {
             <div className="max-w-4xl mx-auto px-4">
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-4xl font-bold text-red-600">Danh sách đặt bàn</h1>
-                    <Button onClick={() => navigate('/booking-form')}>+ Đặt bàn mới</Button>
+                    <Button onClick={() => navigate('/menu')}>+ Đặt bàn mới</Button>
                 </div>
 
                 {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
@@ -111,79 +86,54 @@ const BookingListPage = () => {
                     <EmptyState
                         icon="📅"
                         title="Không có đặt bàn"
-                        description={`Chưa có đặt bàn với bộ lọc "${filter}"`}
-                        action={<Button onClick={() => navigate('/booking-form')}>Đặt bàn ngay</Button>}
+                        description={bookings.length === 0
+                            ? 'Bạn chưa có đơn đặt bàn nào. Chọn món tại Menu (Ăn tại quán) để bắt đầu.'
+                            : `Chưa có đặt bàn với bộ lọc "${filter}"`}
+                        action={<Button onClick={() => navigate('/menu')}>Xem Menu</Button>}
                     />
                 ) : (
                     <div className="space-y-4">
-                        {filtered.map(booking => {
-                            const bookingDate = new Date(booking.booking_date);
-                            const isUpcoming = bookingDate > new Date() && booking.status !== 'cancelled';
+                        {filtered.map(bill => {
+                            const bookingDate = bill.booking_date ? new Date(bill.booking_date) : null;
+                            const isUpcoming = bookingDate && bookingDate >= new Date() && bill.status !== 'cancelled';
 
                             return (
                                 <Card
-                                    key={booking.booking_id}
+                                    key={bill.id}
                                     className={isUpcoming ? 'border-l-4 border-l-green-500' : ''}
                                 >
                                     <div className="flex justify-between items-start mb-4">
                                         <div>
-                                            <h3 className="font-bold text-lg">Bàn {booking.table_number}</h3>
-                                            <p className="text-sm text-gray-600">{booking.booking_code}</p>
+                                            <h3 className="font-bold text-lg">Bàn {bill.table_number || '—'}</h3>
+                                            <p className="text-sm text-gray-600">{bill.bill_code}</p>
                                         </div>
-                                        <Badge
-                                            variant={
-                                                booking.status === 'confirmed' ? 'success' :
-                                                booking.status === 'cancelled' ? 'danger' : 'warning'
-                                            }
-                                        >
-                                            {booking.status === 'confirmed' ? '✓ Xác nhận' :
-                                             booking.status === 'cancelled' ? '✕ Đã hủy' : '⏳ Chờ xác nhận'}
+                                        <Badge variant={bill.is_paid ? 'success' : bill.status === 'cancelled' ? 'danger' : 'warning'}>
+                                            {bill.is_paid ? '✓ Đã thanh toán' : bill.status === 'cancelled' ? '✕ Đã hủy' : '⏳ Chờ thanh toán'}
                                         </Badge>
                                     </div>
 
-                                    <div className="grid md:grid-cols-5 gap-4 mb-4">
+                                    <div className="grid md:grid-cols-4 gap-4 mb-4">
                                         <div>
                                             <p className="text-sm text-gray-600">Ngày</p>
-                                            <p className="font-semibold">{bookingDate.toLocaleDateString('vi-VN')}</p>
+                                            <p className="font-semibold">{bookingDate ? bookingDate.toLocaleDateString('vi-VN') : '—'}</p>
                                         </div>
                                         <div>
                                             <p className="text-sm text-gray-600">Giờ</p>
-                                            <p className="font-semibold">{booking.arrival_time}</p>
+                                            <p className="font-semibold">{bill.arrival_time || '—'}</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600">Khách</p>
-                                            <p className="font-semibold">{booking.guest_count} người</p>
+                                            <p className="text-sm text-gray-600">Tổng tiền</p>
+                                            <p className="font-semibold text-red-600">{Number(bill.total_amount || 0).toLocaleString('vi-VN')}đ</p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600">Thời gian</p>
-                                            <p className="font-semibold">{booking.duration} phút</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <Button
-                                                onClick={() => {
-                                                    setSelectedBooking(booking);
-                                                    setShowDetailModal(true);
-                                                }}
-                                                size="sm"
-                                            >
-                                                Chi tiết
-                                            </Button>
+                                            <p className="text-sm text-gray-600">Trạng thái</p>
+                                            <p className="font-semibold">{bill.status || 'pending'}</p>
                                         </div>
                                     </div>
                                 </Card>
                             );
                         })}
                     </div>
-                )}
-
-                {/* Detail Modal */}
-                {showDetailModal && selectedBooking && (
-                    <BookingDetail
-                        booking={selectedBooking}
-                        onClose={() => setShowDetailModal(false)}
-                        onReschedule={handleReschedule}
-                        onCancel={handleCancel}
-                    />
                 )}
             </div>
         </div>

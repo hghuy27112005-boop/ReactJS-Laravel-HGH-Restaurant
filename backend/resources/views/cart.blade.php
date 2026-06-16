@@ -1,6 +1,9 @@
 @extends('layout')
 
 @section('content')
+    @php
+        $cartMode = $cartMode ?? 'mang-ve';
+    @endphp
     <style>
         .cart-container {
             max-width: 1250px;
@@ -509,6 +512,23 @@
             cursor: not-allowed;
             border-color: #ddd;
         }
+
+        .page-switch {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 10px;
+        }
+
+        .page-switch a {
+            color: #C0392B;
+            font-weight: 600;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .page-switch a:hover {
+            text-decoration: underline;
+        }
     </style>
 
     <div class="cart-container">
@@ -516,7 +536,21 @@
             <a href="{{ url('/menu') }}" class="btn-back"><i class="fas fa-arrow-left"></i> Quay về Menu</a>
         </div>
 
-        <h1 class="cart-title">Quản Lý Giỏ Hàng</h1>
+        <div class="page-switch">
+            @if($cartMode === 'mang-ve')
+                <a href="{{ route('cart.booking') }}"><i class="fas fa-chair"></i> Chuyển sang Đặt Bàn</a>
+            @else
+                <a href="{{ route('cart.order') }}"><i class="fas fa-shopping-bag"></i> Chuyển sang Đặt Hàng</a>
+            @endif
+        </div>
+
+        <h1 class="cart-title">
+            @if($cartMode === 'mang-ve')
+                Đặt Hàng (Mang Về / Giao Hàng)
+            @else
+                Đặt Bàn (Ăn Tại Quán)
+            @endif
+        </h1>
 
         @php
             $items = session()->get('cart', []);
@@ -537,6 +571,7 @@
             }
         @endphp
 
+        @if($cartMode === 'mang-ve')
         <div class="cart-section">
             <div class="section-header" style="color: #C0392B;">
                 <span><i class="fas fa-truck"></i> Đơn Giao Hàng (Mang Về)</span>
@@ -601,7 +636,9 @@
                 @endif
             </div>
         </div>
+        @endif
 
+        @if($cartMode === 'dat-ban')
         <div class="cart-section" style="border-top-color: #C0392B;">
             <div class="section-header" style="color: #C0392B;">
                 <span><i class="fas fa-utensils"></i> Đơn Tại Bàn (Dine-in)</span>
@@ -653,7 +690,7 @@
                         </div>
                     @endif
                     <div class="total-box">Tổng: <span>{{ number_format(sumTotal($dineInItems), 0, ',', '.') }}đ</span></div>
-                    <button class="btn-action btn-confirm" onclick="handleConfirm(this, 'dat-ban')" {{ (session('table_number') && count($dineInItems) > 0) ? '' : 'disabled' }}>Xác Nhận</button>
+                    <button class="btn-action btn-confirm" onclick="handleConfirm(this, 'dat-ban')" {{ (session('table_numbers') && count($dineInItems) > 0) ? '' : 'disabled' }}>Xác Nhận</button>
                 @else
                     @if(session('paid_dat-ban'))
                         <button id="btn-pay-dat-ban" type="button" class="btn-action" style="background: #777;" disabled>Đã thanh
@@ -667,8 +704,10 @@
                 @endif
             </div>
         </div>
+        @endif
     </div>
 
+    @if($cartMode === 'mang-ve')
     <div id="addressModal" class="modal">
         <div class="modal-content">
             <h3>Địa chỉ giao hàng</h3>
@@ -680,7 +719,9 @@
             </div>
         </div>
     </div>
+    @endif
 
+    @if($cartMode === 'dat-ban')
     <div id="bookingModal" class="modal">
         <div class="modal-content" style="width: 550px;">
             <div class="step-indicator">
@@ -852,7 +893,9 @@
             </div>
         </div>
     </div>
+    @endif
 
+    @if($cartMode === 'mang-ve')
     <div id="editQtyMangVeModal" class="modal">
         <div class="modal-content" style="width: 600px;">
             <h3>Sửa số lượng (Mang về)</h3>
@@ -872,7 +915,9 @@
             </div>
         </div>
     </div>
+    @endif
 
+    @if($cartMode === 'dat-ban')
     <div id="editQtyDatBanModal" class="modal">
         <div class="modal-content" style="width: 600px; border-top-color: #C0392B;">
             <h3>Sửa số lượng (Tại bàn)</h3>
@@ -892,6 +937,7 @@
             </div>
         </div>
     </div>
+    @endif
 
     <div id="paymentModal" class="modal">
         <div class="modal-content" style="border-top: 5px solid #C0392B;">
@@ -951,7 +997,7 @@
     @endphp
 
     <script>
-        let currentPayType = 'mang-ve'; // Default
+        let currentPayType = @json($cartMode);
         const sessionVars = {
             token: "{{ csrf_token() }}",
             billMangVe: @json(session('last_bill_code_mang-ve')),

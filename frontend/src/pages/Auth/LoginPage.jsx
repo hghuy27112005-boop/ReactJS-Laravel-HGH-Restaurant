@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useAuthContext } from '../../context/AuthContext';
-import { ErrorMessage } from '../../components/Shared';
+import { ErrorMessage, SuccessMessage } from '../../components/Shared';
 
 const LoginPage = () => {
-    const { login, register, loading, error } = useAuthContext();
+    const { login, register, loading, error, setError } = useAuthContext();
     const [activeTab, setActiveTab] = useState('login');
     const [localError, setLocalError] = useState(null);
+    const [successMessage, setSuccessMessage] = useState(null);
 
     // Login Form State
     const [loginData, setLoginData] = useState({ username: '', password: '' });
@@ -27,17 +28,25 @@ const LoginPage = () => {
         setRegData({ ...regData, [e.target.name]: e.target.value });
     };
 
+    const switchTab = (tab) => {
+        setActiveTab(tab);
+        setLocalError(null);
+        setSuccessMessage(null);
+        setError(null);
+    };
+
     const handleLoginSubmit = async (e) => {
         e.preventDefault();
         setLocalError(null);
+        setSuccessMessage(null);
 
         if (!loginData.username || !loginData.password) {
             setLocalError('Vui lòng điền đầy đủ thông tin đăng nhập');
             return;
         }
 
-        const success = await login(loginData.username, loginData.password);
-        if (success) {
+        const result = await login(loginData.username, loginData.password);
+        if (result?.success) {
             window.location.href = '/';
         }
     };
@@ -45,18 +54,20 @@ const LoginPage = () => {
     const handleRegSubmit = async (e) => {
         e.preventDefault();
         setLocalError(null);
+        setSuccessMessage(null);
 
         if (regData.password !== regData.password_confirmation) {
             setLocalError('Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại!');
             return;
         }
 
-        // Assuming register function in AuthContext expects these fields
-        const success = await register(regData);
-        
-        if (success) {
-            alert('Đăng ký thành công! Chuyển hướng về trang chủ...');
-            window.location.href = '/';
+        const result = await register(regData);
+
+        if (result?.success) {
+            setSuccessMessage('Đăng ký thành công! Chuyển hướng về trang chủ...');
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1500);
         }
     };
 
@@ -240,19 +251,20 @@ const LoginPage = () => {
                 <div className="tab-buttons">
                     <button 
                         className={`tab-btn ${activeTab === 'login' ? 'active' : ''}`} 
-                        onClick={() => setActiveTab('login')}
+                        onClick={() => switchTab('login')}
                     >
                         <i className="fas fa-sign-in-alt"></i> Đăng nhập
                     </button>
                     <button 
                         className={`tab-btn ${activeTab === 'register' ? 'active' : ''}`} 
-                        onClick={() => setActiveTab('register')}
+                        onClick={() => switchTab('register')}
                     >
                         <i className="fas fa-user-plus"></i> Đăng ký
                     </button>
                 </div>
 
                 <div style={{ padding: '0 30px' }}>
+                    {successMessage && <div className="mt-4"><SuccessMessage message={successMessage} /></div>}
                     {error && <div className="mt-4"><ErrorMessage message={error} /></div>}
                     {localError && <div className="mt-4"><ErrorMessage message={localError} /></div>}
                 </div>
@@ -294,7 +306,7 @@ const LoginPage = () => {
                     </form>
 
                     <div className="switch-link">
-                        Chưa có tài khoản? <button type="button" onClick={() => setActiveTab('register')}>Đăng ký ngay!</button>
+                        Chưa có tài khoản? <button type="button" onClick={() => switchTab('register')}>Đăng ký ngay!</button>
                     </div>
 
                     <div className="social-login-divider">
@@ -373,7 +385,7 @@ const LoginPage = () => {
                     </form>
 
                     <div className="switch-link">
-                        Đã có tài khoản? <button type="button" onClick={() => setActiveTab('login')}>Đăng nhập ngay!</button>
+                        Đã có tài khoản? <button type="button" onClick={() => switchTab('login')}>Đăng nhập ngay!</button>
                     </div>
                 </div>
             </div>

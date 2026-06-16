@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { deliveryAPI } from '../../services/api';
+import { deliveryService, extractListData } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState } from '../../components/Shared';
 
 const DeliveriesPage = () => {
@@ -15,10 +15,12 @@ const DeliveriesPage = () => {
     const fetchDeliveries = async () => {
         try {
             setLoading(true);
+            setError(null);
             const response = await deliveryService.getDeliveries();
-            setDeliveries(response.data.data);
+            setDeliveries(extractListData(response));
         } catch (err) {
-            setError('Lỗi tải danh sách giao hàng');
+            if (err.response?.status === 401) return;
+            setError(err.response?.data?.message || 'Không thể tải danh sách giao hàng. Vui lòng thử lại.');
             console.error(err);
         } finally {
             setLoading(false);
@@ -27,29 +29,26 @@ const DeliveriesPage = () => {
 
     const getFilteredDeliveries = () => {
         if (filter === 'all') return deliveries;
+        if (filter === 'delivered') {
+            return deliveries.filter(d => d.is_paid || d.status === 'completed');
+        }
+        if (filter === 'pending') {
+            return deliveries.filter(d => !d.is_paid && d.status === 'pending');
+        }
         return deliveries.filter(d => d.status === filter);
     };
 
-    const getStatusColor = (status) => {
-        const colors = {
-            pending: 'warning',
-            approved: 'info',
-            in_delivery: 'info',
-            delivered: 'success',
-            cancelled: 'danger',
-        };
-        return colors[status] || 'default';
+    const getStatusColor = (bill) => {
+        if (bill.status === 'cancelled') return 'danger';
+        if (bill.is_paid || bill.status === 'completed') return 'success';
+        return 'warning';
     };
 
-    const getStatusLabel = (status) => {
-        const labels = {
-            pending: '⏳ Chờ xác nhận',
-            approved: '✓ Đã xác nhận',
-            in_delivery: '🚗 Đang giao',
-            delivered: '✓ Đã giao',
-            cancelled: '✕ Hủy',
-        };
-        return labels[status] || status;
+    const getStatusLabel = (bill) => {
+        if (bill.status === 'cancelled') return '✕ Đã hủy';
+        if (bill.is_paid) return '✓ Đã thanh toán';
+        if (bill.status === 'completed') return '✓ Hoàn thành';
+        return '⏳ Chờ thanh toán';
     };
 
     if (loading) return <Loading />;
@@ -65,7 +64,7 @@ const DeliveriesPage = () => {
 
                 {/* Filter Buttons */}
                 <div className="flex gap-2 mb-8 overflow-x-auto">
-                    {['all', 'pending', 'approved', 'in_delivery', 'delivered', 'cancelled'].map(f => (
+                    {['all', 'pending', 'delivered', 'cancelled'].map(f => (
                         <button
                             key={f}
                             onClick={() => setFilter(f)}
@@ -75,62 +74,41 @@ const DeliveriesPage = () => {
                                     : 'bg-white border border-gray-300 text-gray-700 hover:border-red-600'
                             }`}
                         >
-                            {f === 'all' ? 'Tất cả' : f.toUpperCase()}
+                            {f === 'all' ? 'Tất cả' : f === 'pending' ? 'Chờ TT' : f === 'delivered' ? 'Đã TT' : 'Đã hủy'}
                         </button>
                     ))}
                 </div>
 
-                {/* Deliveries List */}
                 {filtered.length === 0 ? (
                     <EmptyState
                         icon="📦"
-                        title="Không có giao hàng"
-                        description={`Hiện chưa có giao hàng với trạng thái "${filter}"`}
+                        title="Không có đơn giao hàng"
+                        description={deliveries.length === 0
+                            ? 'Bạn chưa có đơn mang về nào. Chọn món tại Menu (Mang về) để bắt đầu.'
+                            : `Chưa có đơn với bộ lọc "${filter}"`}
                     />
                 ) : (
                     <div className="space-y-4">
-                        {filtered.map(delivery => (
-                            <Card key={delivery.delivery_id} title={`Giao hàng #${delivery.delivery_code}`}>
+                        {filtered.map(bill => (
+                            <Card key={bill.id} title={`Hóa đơn #${bill.bill_code}`}>
                                 <div className="grid md:grid-cols-3 gap-4 mb-4">
                                     <div>
                                         <p className="text-sm text-gray-600">Địa chỉ</p>
-                                        <p className="font-semibold">{delivery.address}</p>
+                                        <p className="font-semibold">{bill.address || '—'}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">SĐT</p>
-                                        <p className="font-semibold">{delivery.phone}</p>
+                                        <p className="text-sm text-gray-600">Ngày đặt</p>
+                                        <p className="font-semibold">{bill.booking_date ? new Date(bill.booking_date).toLocaleDateString('vi-VN') : '—'}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Phí giao</p>
-                                        <p className="font-bold text-red-600">5,000đ</p>
+                                        <p className="text-sm text-gray-600">Tổng tiền</p>
+                                        <p className="font-bold text-red-600">{Number(bill.total_amount || 0).toLocaleString('vi-VN')}đ</p>
                                     </div>
-                                </div>
-
-                                {/* Timeline */}
-                                <div className="space-y-3 py-4 border-t border-b">
-                                    {delivery.approved_at && (
-                                        <div className="flex gap-3">
-                                            <span>✓ Xác nhận:</span>
-                                            <span className="text-gray-600">{new Date(delivery.approved_at).toLocaleString('vi-VN')}</span>
-                                        </div>
-                                    )}
-                                    {delivery.delivery_started_at && (
-                                        <div className="flex gap-3">
-                                            <span>🚗 Bắt đầu giao:</span>
-                                            <span className="text-gray-600">{new Date(delivery.delivery_started_at).toLocaleString('vi-VN')}</span>
-                                        </div>
-                                    )}
-                                    {delivery.delivered_at && (
-                                        <div className="flex gap-3">
-                                            <span>✓ Giao thành công:</span>
-                                            <span className="text-gray-600">{new Date(delivery.delivered_at).toLocaleString('vi-VN')}</span>
-                                        </div>
-                                    )}
                                 </div>
 
                                 <div className="mt-4">
-                                    <Badge variant={getStatusColor(delivery.status)}>
-                                        {getStatusLabel(delivery.status)}
+                                    <Badge variant={getStatusColor(bill)}>
+                                        {getStatusLabel(bill)}
                                     </Badge>
                                 </div>
                             </Card>

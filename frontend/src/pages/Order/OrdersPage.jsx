@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { billAPI, deliveryAPI } from '../../services/api';
+import { billService, extractListData } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, Button, Modal } from '../../components/Shared';
 
 const OrdersPage = () => {
@@ -17,10 +17,12 @@ const OrdersPage = () => {
     const fetchOrders = async () => {
         try {
             setLoading(true);
+            setError(null);
             const response = await billService.getBills();
-            setOrders(response.data.data);
+            setOrders(extractListData(response));
         } catch (err) {
-            setError('Lỗi tải danh sách đơn hàng');
+            if (err.response?.status === 401) return;
+            setError(err.response?.data?.message || 'Không thể tải danh sách đơn hàng. Vui lòng thử lại.');
             console.error(err);
         } finally {
             setLoading(false);

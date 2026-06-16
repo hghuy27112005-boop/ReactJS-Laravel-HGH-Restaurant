@@ -178,10 +178,32 @@
             cursor: pointer;
             padding: 0;
         }
+
+        .auth-message {
+            margin: 20px 30px 0;
+            padding: 12px 16px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .auth-message.error {
+            background-color: #fdecea;
+            border: 1px solid #f5c6cb;
+            color: #c0392b;
+        }
+
+        .auth-message.success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
     </style>
 
     <div class="container auth-page">
         <div class="auth-box">
+            <div id="authMessage" class="auth-message" style="display: none;"></div>
+
             <div class="tab-buttons">
                 <button class="tab-btn active" data-tab="login">
                     <i class="fas fa-sign-in-alt"></i> Đăng nhập
@@ -229,8 +251,8 @@
                     <input type="text" id="regUsername" name="username" required maxlength="20"
                         placeholder="Nhập tên người dùng (tối đa 20 ký tự)">
 
-                    <label for="regEmail">Email:</label>
-                    <input type="email" id="regEmail" name="email" maxlength="50"
+                    <label for="regEmail">Email (*):</label>
+                    <input type="email" id="regEmail" name="email" required maxlength="50"
                         placeholder="ví dụ: a@gmail.com (tối đa 50 ký tự)">
 
                     <label for="regPhone">Số điện thoại:</label>
@@ -259,7 +281,23 @@
             setupTabSwitching();
         });
 
+        function showAuthMessage(message, type = 'error') {
+            const box = document.getElementById('authMessage');
+            box.textContent = message;
+            box.className = `auth-message ${type}`;
+            box.style.display = 'block';
+            box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function hideAuthMessage() {
+            const box = document.getElementById('authMessage');
+            box.style.display = 'none';
+            box.textContent = '';
+            box.className = 'auth-message';
+        }
+
         function switchToTab(targetId) {
+            hideAuthMessage();
             const tabs = document.querySelectorAll('.tab-btn');
             const contents = document.querySelectorAll('.tab-content');
 
@@ -285,6 +323,11 @@
         async function handleLogin() {
             const username = document.getElementById('loginUsername').value;
             const password = document.getElementById('loginPassword').value;
+            const loginBtn = document.getElementById('loginBtn');
+
+            hideAuthMessage();
+            loginBtn.disabled = true;
+            loginBtn.textContent = 'Đang xử lý...';
 
             try {
                 const response = await fetch("{{ route('login.submit') }}", {
@@ -303,19 +346,23 @@
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    hghAlert(result.message, 'success').then(() => {
+                    showAuthMessage(result.message || 'Đăng nhập thành công!', 'success');
+                    setTimeout(() => {
                         if (result.role === 'admin') {
                             window.location.href = "{{ route('admin.menu_management') }}";
                         } else {
                             window.location.href = "{{ url('/') }}";
                         }
-                    });
+                    }, 1000);
                 } else {
-                    hghAlert(result.message || 'Tên đăng nhập hoặc mật khẩu không đúng!', 'error');
+                    showAuthMessage(result.message || 'Tài khoản không tồn tại.', 'error');
                 }
             } catch (error) {
                 console.error('Lỗi kết nối:', error);
-                hghAlert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
+                showAuthMessage('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Đăng nhập';
             }
         }
 
@@ -325,11 +372,17 @@
             const phone = document.getElementById('regPhone').value;
             const pass = document.getElementById('regPassword').value;
             const confirmPass = document.getElementById('regConfirmPassword').value;
+            const registerBtn = document.getElementById('registerBtn');
+
+            hideAuthMessage();
 
             if (pass !== confirmPass) {
-                hghAlert('Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại!', 'warning');
+                showAuthMessage('Mật khẩu xác nhận không khớp. Vui lòng kiểm tra lại!', 'error');
                 return;
             }
+
+            registerBtn.disabled = true;
+            registerBtn.textContent = 'Đang xử lý...';
 
             try {
                 const response = await fetch("{{ route('register.submit') }}", {
@@ -343,26 +396,27 @@
                         username: username,
                         email: email,
                         phone: phone,
-                        password: pass
+                        password: pass,
+                        password_confirmation: confirmPass
                     })
                 });
 
                 const result = await response.json();
 
                 if (response.ok && result.success) {
-                    hghAlert('Đăng ký thành công! Chuyển hướng về trang chủ...', 'success').then(() => {
+                    showAuthMessage('Đăng ký thành công! Chuyển hướng về trang chủ...', 'success');
+                    setTimeout(() => {
                         window.location.href = "{{ url('/') }}";
-                    });
+                    }, 1500);
                 } else {
-                    let errorMsg = result.message || 'Đăng ký thất bại';
-                    if (result.errors) {
-                        errorMsg += ": " + Object.values(result.errors).flat().join(', ');
-                    }
-                    hghAlert(errorMsg, 'error');
+                    showAuthMessage(result.message || 'Tài khoản đã tồn tại.', 'error');
                 }
             } catch (error) {
                 console.error('Lỗi kết nối:', error);
-                hghAlert('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
+                showAuthMessage('Không thể kết nối đến máy chủ. Vui lòng thử lại sau!', 'error');
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.textContent = 'Đăng ký';
             }
         }
 

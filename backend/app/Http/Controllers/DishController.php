@@ -7,29 +7,41 @@ use App\Models\Dish;
 
 class DishController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // Return JSON for the React frontend
         $dishes = Dish::all();
 
-        // Xử lý logic để tự động map image_url thành full URL bằng accessor
-        // Accessor getImageUrlAttribute sẽ tự động nối http://localhost:8000/dishes/ cho các field image_url
-        // Khi dùng response()->json(), Laravel sẽ tự động trigger các accessor nếu chúng ta append (tuy nhiên ta có thể map thủ công nếu Model chưa config 'appends')
-        $dishes->each(function($dish) {
-            $dish->image_url = $dish->image_url; // Kích hoạt accessor nếu có
-        });
+        if ($request->expectsJson()) {
+            $dishes->each(function ($dish) {
+                $dish->image_url = $dish->image_url;
+            });
 
-        return response()->json($dishes);
+            return response()->json($dishes);
+        }
+
+        return view('menu', ['danhSachMon' => $dishes]);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
         $dish = Dish::find($id);
         if (!$dish) {
-            return response()->json(['message' => 'Không tìm thấy món ăn'], 404);
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Không tìm thấy món ăn'], 404);
+            }
+            abort(404);
         }
 
-        return response()->json($dish);
+        if ($request->expectsJson()) {
+            return response()->json($dish);
+        }
+
+        $allDishes = Dish::orderBy('dish_id', 'asc')->get();
+
+        return view('dish-detail', [
+            'mon' => $dish,
+            'allDishes' => $allDishes,
+        ]);
     }
 
     public function menuManagement()

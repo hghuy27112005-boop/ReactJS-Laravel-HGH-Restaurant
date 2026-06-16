@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Laravel\Socialite\Facades\Socialite;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 
 class AuthController extends Controller
 {
@@ -28,6 +29,7 @@ class AuthController extends Controller
 
         if (Auth::attempt([$loginType => $login, 'password' => $request->password])) {
             $user = Auth::user();
+            $request->session()->regenerate();
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
@@ -41,13 +43,29 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => 'Thông tin đăng nhập không chính xác.'
+            'message' => 'Tài khoản không tồn tại.'
         ], 401);
     }
 
     public function register(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        if ($request->filled('email') && User::where('email', $request->email)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tài khoản đã tồn tại.'
+            ], 422);
+        }
+
+        $phone = $request->filled('phone') ? trim($request->phone) : null;
+
+        if ($phone && User::where('tele_number', $phone)->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Số điện thoại này đã được sử dụng.'
+            ], 422);
+        }
+
+        $validator = Validator::make(array_merge($request->all(), ['phone' => $phone]), [
             'username' => 'required|max:20|unique:users,username',
             'email' => [
                 'required',
@@ -56,7 +74,7 @@ class AuthController extends Controller
                 'unique:users,email',
                 'regex:/^[a-zA-Z0-9._%+-]+@((student\.)?ctu\.edu\.vn|gmail\.com)$/',
             ],
-            'phone' => 'nullable|max:10',
+            'phone' => 'nullable|max:10|unique:users,tele_number',
             'password' => 'required|min:6|confirmed', // 'confirmed' kiểm tra password_confirmation
         ], [
             'username.required' => 'Vui lòng nhập tên đăng nhập.',
@@ -64,8 +82,9 @@ class AuthController extends Controller
             'username.max' => 'Tên đăng nhập không được quá 20 ký tự.',
             'email.required' => 'Vui lòng nhập địa chỉ Gmail.',
             'email.email' => 'Định dạng Email không hợp lệ.',
-            'email.unique' => 'Tài khoản ứng với Gmail này đã tồn tại.',
+            'email.unique' => 'Tài khoản đã tồn tại.',
             'email.regex' => 'Email phải có định dạng @gmail.com.',
+            'phone.unique' => 'Số điện thoại này đã được sử dụng.',
             'password.required' => 'Vui lòng nhập mật khẩu.',
             'password.min' => 'Mật khẩu phải có ít nhất 6 ký tự.',
             'password.confirmed' => 'Mật khẩu nhập lại không khớp.'
@@ -74,7 +93,7 @@ class AuthController extends Controller
         if ($validator->fails()) {
             return response()->json([
                 'success' => false,
-                'message' => $validator->errors()->first() // CHỈ LẤY LỖI ĐẦU TIÊN
+                'message' => $validator->errors()->first()
             ], 422);
         }
 
@@ -82,11 +101,13 @@ class AuthController extends Controller
             $user = User::create([
                 'username' => $request->username,
                 'email' => $request->email,
-                'tele_number' => $request->phone,
+                'tele_number' => $phone,
                 'password_hash' => Hash::make($request->password),
                 'role' => 'user',
             ]);
 
+            Auth::login($user);
+            $request->session()->regenerate();
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
@@ -96,12 +117,36 @@ class AuthController extends Controller
                 'token' => $token,
                 'role' => $user->role
             ]);
+        } catch (QueryException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $this->mapRegisterDatabaseError($e)
+            ], 422);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Lỗi hệ thống: ' . $e->getMessage()
+                'message' => 'Đăng ký thất bại. Vui lòng thử lại sau.'
             ], 500);
         }
+    }
+
+    private function mapRegisterDatabaseError(QueryException $e): string
+    {
+        $errorMessage = $e->getMessage();
+
+        if (str_contains($errorMessage, 'users_email_unique') || str_contains($errorMessage, '(email)=')) {
+            return 'Tài khoản đã tồn tại.';
+        }
+
+        if (str_contains($errorMessage, 'users_tele_number_unique') || str_contains($errorMessage, '(tele_number)=')) {
+            return 'Số điện thoại này đã được sử dụng.';
+        }
+
+        if (str_contains($errorMessage, 'users_username_unique') || str_contains($errorMessage, '(username)=')) {
+            return 'Tên đăng nhập này đã tồn tại.';
+        }
+
+        return 'Tài khoản đã tồn tại.';
     }
 
     public function profile()
@@ -257,8 +302,8 @@ class AuthController extends Controller
 
         return response()->json([
             'success' => false,
-            'message' => 'Thông tin không khớp với hệ thống.'
-        ], 404);
+            'message' => 'Tài khoản không tồn tại hoặc sai mật khẩu.'
+        ], 401);
     }
 
     public function resetPassword(Request $request)

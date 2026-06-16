@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { deliveryAPI } from '../../services/api';
+import { deliveryService, extractListData } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, Button } from '../../components/Shared';
 
 const AdminDeliveriesPage = () => {
@@ -15,10 +15,12 @@ const AdminDeliveriesPage = () => {
     const fetchDeliveries = async () => {
         try {
             setLoading(true);
+            setError(null);
             const response = await deliveryService.getDeliveries();
-            setDeliveries(response.data.data);
+            setDeliveries(extractListData(response));
         } catch (err) {
-            setError('Lỗi tải danh sách giao hàng');
+            if (err.response?.status === 401) return;
+            setError(err.response?.data?.message || 'Không thể tải danh sách giao hàng.');
             console.error(err);
         } finally {
             setLoading(false);

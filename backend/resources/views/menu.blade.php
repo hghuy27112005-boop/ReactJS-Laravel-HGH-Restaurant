@@ -141,7 +141,7 @@
             return;
         }
 
-        fetch('/add-to-cart', {
+        fetch('{{ route('cart.add') }}', {
             method: 'POST',
             headers: { 
                 'Content-Type': 'application/json',
@@ -163,7 +163,11 @@
             return res.json();
         })
         .then(data => {
-            hghAlert(`Thành công! Đã thêm ${qty} ${currentDish.name} vào giỏ hàng.`, "success");
+            const orderType = document.getElementById("orderType").value;
+            const cartUrl = orderType === 'dat-ban' ? '{{ route('cart.booking') }}' : '{{ route('cart.order') }}';
+            hghAlert(`Thành công! Đã thêm ${qty} ${currentDish.name} vào giỏ hàng.`, "success").then(() => {
+                window.location.href = cartUrl;
+            });
             closeModal();
         })
         .catch(err => {

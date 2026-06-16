@@ -24,18 +24,27 @@ Route::get('/login-register', function () {
     return view('login_register');
 })->name('login');
 
+Route::post('/api/register', [AuthController::class, 'register'])->name('register.submit');
+Route::post('/api/login', [AuthController::class, 'login'])->name('login.submit');
+Route::get('/forgot-password', [AuthController::class, 'showForgotPassword'])->name('password.request');
+Route::post('/api/forgot-password/verify', [AuthController::class, 'verifyUser'])->name('password.verify');
+Route::post('/api/forgot-password/reset', [AuthController::class, 'resetPassword'])->name('password.update');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/profile', [AuthController::class, 'profile'])->name('profile');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-    Route::get('/gio-hang', [CartController::class, 'index'])->name('cart.index');
+    Route::get('/gio-hang', fn () => redirect()->route('cart.order'));
+    Route::get('/dat-hang', [CartController::class, 'orderCart'])->name('cart.order');
+    Route::get('/dat-ban', [CartController::class, 'bookingCart'])->name('cart.booking');
+    Route::post('/add-to-cart', [CartController::class, 'addToCart'])->name('cart.add');
     Route::post('/update-cart', [CartController::class, 'updateCart']);
     Route::post('/update-cart-quantities', [CartController::class, 'updateCartQuantities']);
     Route::post('/save-address', [CartController::class, 'saveAddress']);
     Route::post('/save-booking', [CartController::class, 'saveBooking']);
     Route::post('/check-multi-overlap', [CartController::class, 'checkMultiOverlap']);
     Route::post('/checkout', [CartController::class, 'checkout']);
+    Route::post('/process-payment', [CartController::class, 'processPayment'])->name('process_payment');
 
     Route::get('/transaction-history', [CartController::class, 'transactionHistory'])->name('transaction_history');
     Route::get('/export-pdf', [CartController::class, 'exportPDF']);

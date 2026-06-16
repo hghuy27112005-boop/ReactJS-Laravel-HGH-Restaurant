@@ -52,9 +52,9 @@ export const useAuth = () => {
 
             return { success: true, user };
         } catch (err) {
-            const message = err.response?.data?.message || 'Login failed';
+            const message = err.response?.data?.message || 'Tài khoản không tồn tại.';
             setError(message);
-            throw err;
+            return { success: false };
         } finally {
             setLoading(false);
         }
@@ -73,9 +73,9 @@ export const useAuth = () => {
 
             return { success: true, user };
         } catch (err) {
-            const message = err.response?.data?.message || 'Registration failed';
+            const message = err.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.';
             setError(message);
-            throw err;
+            return { success: false };
         } finally {
             setLoading(false);
         }
@@ -97,6 +97,7 @@ export const useAuth = () => {
         user,
         loading,
         error,
+        setError,
         login,
         register,
         logout,

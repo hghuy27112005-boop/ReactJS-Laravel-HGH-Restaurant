@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { bookingTableAPI } from '../../services/api';
+import { bookingService } from '../../services/api';
 import { Button, Card, ErrorMessage, SuccessMessage } from '../../components/Shared';
 
 const BookingFormPage = () => {
