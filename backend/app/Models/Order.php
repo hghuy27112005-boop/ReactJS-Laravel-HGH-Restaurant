@@ -7,107 +7,89 @@ use Illuminate\Database\Eloquent\Model;
 class Order extends Model
 {
     protected $table = 'orders';
+
+    protected $primaryKey = 'order_id';
+
+    public $incrementing = false;
+
+    protected $keyType = 'string';
+
     public $timestamps = false;
-    
+
     protected $fillable = [
-        'order_code',
-        'bill_id',
-        'dish_id',
-        'quantity',
-        'price_at_order',
+        'order_id',
+        'user_id',
         'order_type',
-        'note',
+        'subtotal_price',
+        'created_at',
+        'updated_at',
     ];
 
     protected $casts = [
-        'quantity' => 'integer',
-        'price_at_order' => 'decimal:2',
+        'subtotal_price' => 'decimal:2',
         'created_at' => 'datetime',
+        'updated_at' => 'datetime',
     ];
 
-    // Relationships
+    /*
+    |--------------------------------------------------------------------------
+    | Relationships
+    |--------------------------------------------------------------------------
+    */
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
     public function bill()
     {
-        return $this->belongsTo(Bill::class, 'bill_id', 'id');
+        return $this->hasOne(Bill::class, 'order_id', 'order_id');
     }
 
-    public function dish()
+    public function booking()
     {
-        return $this->belongsTo(Dish::class, 'dish_id', 'dish_id');
+        return $this->hasOne(BookingTable::class, 'order_id', 'order_id');
     }
 
-    // ============================================
-    // HELPER METHODS
-    // ============================================
-
-    /**
-     * Generate unique order code (DDMMYY_SEQUENCE)
-     */
-    public function generateOrderCode()
+    public function delivery()
     {
-        $today = now();
-        $prefix = $today->format('dmy'); // DDMMYY
-        
-        $count = Order::whereDate('created_at', $today)
-            ->count() + 1;
-        
-        $sequence = str_pad($count, 4, '0', STR_PAD_LEFT);
-        $this->order_code = $prefix . '_' . $sequence;
+        return $this->hasOne(Delivery::class, 'order_id', 'order_id');
+    }
+
+    public function items()
+    {
+        return $this->hasMany(OrderItem::class, 'order_id', 'order_id');
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Helper Methods
+    |--------------------------------------------------------------------------
+    */
+
+    public function calculateSubtotal()
+    {
+        return $this->items->sum(function ($item) {
+            return $item->quantity * $item->unit_price;
+        });
+    }
+
+    public function refreshSubtotal()
+    {
+        $this->subtotal_price = $this->calculateSubtotal();
         $this->save();
+
+        return $this->subtotal_price;
     }
 
-    /**
-     * Get total price for this order item
-     */
-    public function getTotalPrice()
+    public function isBooking()
     {
-        return $this->price_at_order * $this->quantity;
+        return $this->order_type === 'booking';
     }
 
-    /**
-     * Get item display info
-     */
-    public function getItemInfo()
+    public function isDelivery()
     {
-        return [
-            'dish_name' => $this->dish->dish_name ?? 'Unknown',
-            'quantity' => $this->quantity,
-            'price_at_order' => $this->price_at_order,
-            'total' => $this->getTotalPrice(),
-            'note' => $this->note,
-        ];
-    }
-
-    /**
-     * Recalculate bill total after quantity change
-     */
-    public function recalculateBillTotal()
-    {
-        if ($this->bill) {
-            $billTotal = $this->bill->orders->sum(function ($order) {
-                return $order->getTotalPrice();
-            });
-            $this->bill->total_amount = $billTotal;
-            $this->bill->save();
-        }
-    }
-
-    /**
-     * Update stock when order placed
-     */
-    public function updateStock()
-    {
-        if ($this->dish) {
-            $stock = Stock::where('dish_id', $this->dish_id)->first();
-            if ($stock) {
-                $stock->decreaseQuantity($this->quantity);
-            }
-        }
-    }
-    }
-
-    public function getTotalPrice()
-    {
-        return $this->quantity * $this->price_at_order;
+        return $this->order_type === 'delivery';
     }
 }

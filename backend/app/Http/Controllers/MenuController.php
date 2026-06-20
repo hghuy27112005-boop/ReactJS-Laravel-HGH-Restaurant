@@ -9,7 +9,7 @@ use App\Models\Bill;
 use App\Models\BillDetail;
 use Carbon\Carbon;
 
-class CartController extends Controller
+class MenuController extends Controller
 {
     public function index()
     {

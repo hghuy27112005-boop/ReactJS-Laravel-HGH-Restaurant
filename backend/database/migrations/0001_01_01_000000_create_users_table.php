@@ -20,6 +20,7 @@ return new class extends Migration {
             $table->enum('role', ['admin', 'staff', 'user'])->default('user');
             $table->enum('membership', ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'administrator'])->default('bronze');
             $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent();
         });
 
         Schema::create('sessions', function (Blueprint $table) {

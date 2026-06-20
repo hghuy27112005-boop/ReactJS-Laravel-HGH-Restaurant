@@ -1,22 +1,29 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { dishAPI } from '../../services/api';
 import { Loading, ErrorMessage, EmptyState, Button, Modal } from '../../components/Shared';
 
 const MenuPage = () => {
+    const navigate = useNavigate();
     const [dishes, setDishes] = useState([]);
     const [filteredDishes, setFilteredDishes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+
     const [search, setSearch] = useState('');
+    const [submittedSearch, setSubmittedSearch] = useState('');
+
     const [selectedType, setSelectedType] = useState('');
     const [types, setTypes] = useState([]);
+
+    const [suggestions, setSuggestions] = useState([]);
+    const [showDropdown, setShowDropdown] = useState(false);
     
     // Modal states
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedDish, setSelectedDish] = useState(null);
     const [quantity, setQuantity] = useState(1);
     const [orderType, setOrderType] = useState('mang-ve');
-    const [note, setNote] = useState('');
 
     useEffect(() => {
         fetchDishes();
@@ -25,7 +32,7 @@ const MenuPage = () => {
 
     useEffect(() => {
         filterDishes();
-    }, [search, selectedType, dishes]);
+    }, [submittedSearch, selectedType, dishes]);
 
     const fetchDishes = async () => {
         try {
@@ -56,24 +63,57 @@ const MenuPage = () => {
     const filterDishes = () => {
         let filtered = dishes;
 
-        if (search) {
+        if (submittedSearch) {
             filtered = filtered.filter(dish =>
-                dish.dish_name.toLowerCase().includes(search.toLowerCase())
+                dish.dish_name
+                    .toLowerCase()
+                    .includes(submittedSearch.toLowerCase())
             );
         }
 
         if (selectedType) {
-            filtered = filtered.filter(dish => dish.type_id === parseInt(selectedType));
+            filtered = filtered.filter(
+                dish => dish.type_id === parseInt(selectedType)
+            );
         }
 
         setFilteredDishes(filtered);
     };
 
-    const handleAddToCart = (dish) => {
+    const handleSearchChange = (e) => {
+        const value = e.target.value;
+
+        setSearch(value);
+
+        if (!value.includes(' ')) {
+            setSuggestions([]);
+            setShowDropdown(false);
+            return;
+        }
+
+        const matched = dishes
+            .filter(dish =>
+                dish.dish_name
+                    .toLowerCase()
+                    .includes(value.trim().toLowerCase())
+            )
+            .slice(0, 5);
+
+        setSuggestions(matched);
+        setShowDropdown(matched.length > 0);
+    };
+
+    const handleSearchSubmit = (e) => {
+        if (e.key === 'Enter') {
+            setSubmittedSearch(search.trim());
+            setShowDropdown(false);
+        }
+    };
+
+    const handleAddToCart = (dish, type) => {
         setSelectedDish(dish);
         setQuantity(1);
-        setOrderType('mang-ve');
-        setNote('');
+        setOrderType(type);
         setIsModalOpen(true);
     };
 
@@ -84,9 +124,27 @@ const MenuPage = () => {
             return;
         }
 
-        // TODO: Implement actual cart API call here
-        alert(`Thành công! Đã thêm ${qty} ${selectedDish.dish_name} vào giỏ hàng.`);
+        const cartKey = orderType === 'mang-ve' ? 'delivery_cart' : 'booking_cart';
+        const currentCart = JSON.parse(localStorage.getItem(cartKey)) || [];
+
+        const existingItemIndex = currentCart.findIndex(item => item.dish_id === selectedDish.dish_id);
+        
+        if (existingItemIndex > -1) {
+            currentCart[existingItemIndex].quantity += qty;
+        } else {
+            currentCart.push({
+                dish_id: selectedDish.dish_id,
+                name: selectedDish.dish_name,
+                price: selectedDish.price,
+                quantity: qty,
+                image_url: selectedDish.image_url
+            });
+        }
+
+        localStorage.setItem(cartKey, JSON.stringify(currentCart));
         setIsModalOpen(false);
+        
+        alert(`Thành công! Đã thêm ${qty} ${selectedDish.dish_name} vào giỏ hàng ${orderType === 'mang-ve' ? 'giao hàng' : 'đặt bàn'}.`);
     };
 
     if (loading) return <Loading />;
@@ -103,13 +161,53 @@ const MenuPage = () => {
                     <div className="grid md:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-semibold mb-2">Tìm kiếm</label>
-                            <input
-                                type="text"
-                                placeholder="Tìm kiếm món ăn..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                className="w-full border border-gray-300 rounded px-4 py-2 focus:outline-none focus:border-red-600"
-                            />
+
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Tìm kiếm món ăn..."
+                                    value={search}
+                                    onChange={handleSearchChange}
+                                    onKeyDown={handleSearchSubmit}
+                                    onBlur={() => {
+                                        setTimeout(() => {
+                                            setShowDropdown(false);
+                                        }, 200);
+                                    }}
+                                    className="w-full border border-gray-300 rounded px-4 py-2 pr-10 focus:outline-none focus:border-red-600"
+                                />
+                                {search && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSearch('');
+                                            setSubmittedSearch('');
+                                            setSuggestions([]);
+                                            setShowDropdown(false);
+                                        }}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-red-600 text-lg font-bold"
+                                    >
+                                        ×
+                                    </button>
+                                )}
+                                {showDropdown && (
+                                    <div className="absolute z-50 w-full max-h-60 overflow-y-auto bg-white border border-gray-300 rounded mt-1 shadow-lg">
+                                        {suggestions.map(dish => (
+                                            <div
+                                                key={dish.dish_id}
+                                                onClick={() => {
+                                                    setSearch(dish.dish_name);
+                                                    setSubmittedSearch(dish.dish_name);
+                                                    setShowDropdown(false);
+                                                }}
+                                                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                                            >
+                                                {dish.dish_name}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-semibold mb-2">Loại món</label>
@@ -157,12 +255,18 @@ const MenuPage = () => {
                                             </span>
                                         </div>
                                     )}
-                                    <div className="mt-auto">
+                                    <div className="mt-auto grid grid-cols-2 gap-2">
                                         <button
-                                            onClick={() => handleAddToCart(dish)}
-                                            className="w-full py-2 px-4 rounded border border-red-600 text-red-600 font-semibold bg-white hover:bg-red-600 hover:text-white transition-colors duration-300"
+                                            onClick={() => handleAddToCart(dish, 'mang-ve')}
+                                            className="w-full py-2 px-2 rounded border border-red-600 text-red-600 font-semibold bg-white hover:bg-red-600 hover:text-white transition-colors duration-300 text-sm"
                                         >
-                                            Thêm vào giỏ hàng
+                                            <i className="fas fa-motorcycle mr-1"></i> Đặt Ship
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddToCart(dish, 'dat-ban')}
+                                            className="w-full py-2 px-2 rounded border border-gray-800 text-gray-800 font-semibold bg-white hover:bg-gray-800 hover:text-white transition-colors duration-300 text-sm"
+                                        >
+                                            <i className="fas fa-chair mr-1"></i> Đặt Bàn
                                         </button>
                                     </div>
                                 </div>
@@ -191,27 +295,6 @@ const MenuPage = () => {
                             max="10"
                             className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-red-600"
                         />
-                    </div>
-                    <div>
-                        <label className="block font-semibold mb-1 text-gray-700">Hình thức:</label>
-                        <select
-                            value={orderType}
-                            onChange={(e) => setOrderType(e.target.value)}
-                            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-red-600"
-                        >
-                            <option value="mang-ve">Mang về (Giao hàng tận nơi)</option>
-                            <option value="dat-ban">Ăn tại quán (Đặt bàn trước)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block font-semibold mb-1 text-gray-700">Ghi chú:</label>
-                        <textarea
-                            value={note}
-                            onChange={(e) => setNote(e.target.value)}
-                            rows="3"
-                            placeholder="Ví dụ: Không cay, nhiều hành..."
-                            className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:border-red-600"
-                        ></textarea>
                     </div>
                 </div>
             </Modal>

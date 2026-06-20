@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id('dish_id');
             $table->foreignId('type_id')->constrained('dish_types', 'type_id');
             $table->string('dish_name', 255)->unique();
-            $table->text('image_url')->nullable();
+            $table->text('image_url');
             $table->decimal('price', 10, 2)->default(30000);
             $table->boolean('is_bestseller')->default(false);
         });

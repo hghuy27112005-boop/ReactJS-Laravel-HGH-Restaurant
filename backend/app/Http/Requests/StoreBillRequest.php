@@ -16,7 +16,7 @@ class StoreBillRequest extends FormRequest
         return [
             'order_type' => 'required|in:booking_table,delivery',
             'items' => 'required|array|min:1',
-            'items.*.dish_id' => 'required|exists:dishes,id',
+            'items.*.dish_id' => 'required|exists:dishes,dish_id',
             'items.*.quantity' => 'required|integer|min:1',
             
             // Delivery fields

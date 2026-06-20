@@ -192,7 +192,7 @@ export const billService = {
 };
 
 export const bookingService = {
-    getBookings: () => myBillsAPI.getAll({ order_type: 'dat-ban' }),
+    getBookings: () => myBillsAPI.getAll({ order_type: 'booking_table' }),
     createBooking: (data) => bookingTableAPI.create(data),
     updateBooking: (id, data) => bookingTableAPI.update(id, data),
     deleteBooking: (id) => bookingTableAPI.delete(id),
@@ -200,7 +200,7 @@ export const bookingService = {
 };
 
 export const deliveryService = {
-    getDeliveries: () => myBillsAPI.getAll({ order_type: 'mang-ve' }),
+    getDeliveries: () => myBillsAPI.getAll({ order_type: 'delivery' }),
     approveDelivery: (id) => deliveryAPI.approve(id),
     startDelivery: (id) => deliveryAPI.startDelivery(id),
 };

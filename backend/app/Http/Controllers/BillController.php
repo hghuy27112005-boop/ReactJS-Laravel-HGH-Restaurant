@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Bill;
 use App\Models\Order;
 use App\Models\Dish;
+use App\Models\Delivery;
 use App\Models\Discount;
 use App\Models\Points;
 use App\Models\Statistics;
@@ -52,69 +53,69 @@ class BillController extends Controller
         $validated = $request->validate([
             'order_type' => 'required|in:booking_table,delivery',
             'items' => 'required|array|min:1',
-            'items.*.dish_id' => 'required|exists:dishes,id',
+            'items.*.dish_id' => 'required|exists:dishes,dish_id',
             'items.*.quantity' => 'required|integer|min:1',
             'items.*.price_at_order' => 'required|numeric|min:0',
-            'table_number' => 'required_if:order_type,booking_table|integer|between:1,50',
-            'booking_table.start_time' => 'required_if:order_type,booking_table|date',
-            'booking_table.end_time' => 'required_if:order_type,booking_table|date|after:booking_table.start_time',
             'delivery.address' => 'required_if:order_type,delivery|string',
             'delivery.phone' => 'required_if:order_type,delivery|string',
         ]);
 
         DB::beginTransaction();
         try {
-            // Create bill
-            $bill = $request->user()->bills()->create([
-                'bill_code' => $this->generateBillCode(),
-                'order_type' => $validated['order_type'],
-                'status' => 'pending',
-                'is_paid' => false,
-                'total_amount' => 0,
-            ]);
-
-            // Add order items
             $totalAmount = 0;
             foreach ($validated['items'] as $item) {
-                Order::create([
-                    'bill_id' => $bill->id,
-                    'dish_id' => $item['dish_id'],
-                    'quantity' => $item['quantity'],
-                    'price_at_order' => $item['price_at_order'],
-                    'order_code' => $this->generateOrderCode(),
-                    'order_type' => $validated['order_type'],
-                ]);
                 $totalAmount += $item['price_at_order'] * $item['quantity'];
             }
 
-            // Create booking table if dine-in
-            if ($validated['order_type'] === 'booking_table') {
-                $bill->bookingTable()->create([
-                    'table_number' => $validated['table_number'],
-                    'start_time' => $validated['booking_table']['start_time'],
-                    'end_time' => $validated['booking_table']['end_time'],
+            // Generate IDs
+            $orderId = $this->generateOrderCode();
+            $billId = $this->generateBillCode();
+
+            // Create Order
+            $order = Order::create([
+                'order_id' => $orderId,
+                'user_id' => $request->user()->user_id,
+                'order_type' => $validated['order_type'],
+                'subtotal_price' => $totalAmount,
+                'created_at' => now(),
+            ]);
+
+            // Add order items
+            foreach ($validated['items'] as $item) {
+                \App\Models\OrderItem::create([
+                    'order_id' => $orderId,
+                    'dish_id' => $item['dish_id'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['price_at_order'],
                 ]);
             }
 
             // Create delivery if takeout
             if ($validated['order_type'] === 'delivery') {
-                $deliveryCode = $this->generateDeliveryCode();
-                $bill->delivery()->create([
-                    'delivery_code' => $deliveryCode,
+                \App\Models\Delivery::create([
+                    'delivery_id' => $this->generateDeliveryCode(),
+                    'order_id' => $orderId,
                     'address' => $validated['delivery']['address'],
-                    'phone' => $validated['delivery']['phone'],
-                    'status' => 'pending',
-                    'final_price' => 0, // Will be calculated on payment
+                    'D_payment_status' => 'unpaid',
+                    'delivery_status' => 'waiting_confirmation',
                 ]);
             }
 
-            // Update bill total
-            $bill->update(['total_amount' => $totalAmount]);
+            // Create Bill
+            $bill = Bill::create([
+                'bill_id' => $billId,
+                'order_id' => $orderId,
+                'total_price' => $totalAmount,
+                'payment_method' => 'unpaid',
+                'created_at' => now(),
+            ]);
 
             DB::commit();
 
             return response()->json([
-                'data' => $bill->load('orders.dish', 'delivery', 'bookingTable'),
+                'data' => [
+                    'bill_id' => $bill->bill_id
+                ],
                 'message' => 'Bill created successfully',
             ], 201);
         } catch (\Exception $e) {
@@ -290,7 +291,7 @@ class BillController extends Controller
     {
         $date = date('dmy');
         $sequence = Bill::whereDate('created_at', today())->count() + 1;
-        return $date . '_' . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+        return $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -300,7 +301,7 @@ class BillController extends Controller
     {
         $date = date('dmy');
         $sequence = Order::whereDate('created_at', today())->count() + 1;
-        return $date . '_' . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+        return $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -310,6 +311,6 @@ class BillController extends Controller
     {
         $date = date('dmy');
         $sequence = Delivery::whereDate('created_at', today())->count() + 1;
-        return $date . 'D' . str_pad($sequence, 3, '0', STR_PAD_LEFT);
+        return $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
     }
 }

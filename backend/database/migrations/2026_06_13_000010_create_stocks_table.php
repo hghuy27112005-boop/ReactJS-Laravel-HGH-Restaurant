@@ -13,6 +13,7 @@ return new class extends Migration
             $table->foreignId('dish_id')->unique()->constrained('dishes', 'dish_id');
             $table->integer('quantity_start')->default(200);
             $table->integer('quantity_left')->default(200);
+            $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent();
         });
         DB::unprepared('

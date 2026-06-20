@@ -45,7 +45,7 @@ class StockController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'dish_id' => 'required|exists:dishes,id',
+            'dish_id' => 'required|exists:dishes,dish_id',
             'quantity_start' => 'required|integer|min:1',
             'cost_per_unit' => 'required|numeric|min:0',
         ]);

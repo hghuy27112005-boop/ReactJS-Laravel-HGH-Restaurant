@@ -26,7 +26,7 @@ Route::get('/sale-off-events/{id}', [\App\Http\Controllers\SaleOffEventControlle
 Route::middleware(['auth:sanctum'])->group(function () {
     // User Profile
     Route::get('/user', [\App\Http\Controllers\UserController::class, 'profile']);
-    Route::get('/my-bills', [\App\Http\Controllers\CartController::class, 'myBillsJson']);
+    Route::get('/my-bills', [\App\Http\Controllers\OrderController::class, 'myBillsJson']);
     Route::put('/user', [\App\Http\Controllers\UserController::class, 'updateProfile']);
     Route::post('/user/avatar', [\App\Http\Controllers\UserController::class, 'uploadAvatar']);
     Route::post('/logout', [\App\Http\Controllers\AuthController::class, 'logout']);

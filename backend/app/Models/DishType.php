@@ -80,7 +80,7 @@ class DishType extends Model
     public function getTotalRevenue()
     {
         return $this->dishes()
-            ->with('orders')
+            ->with('orderItems')
             ->get()
             ->sum(function ($dish) {
                 return $dish->getTotalRevenue();
@@ -93,8 +93,8 @@ class DishType extends Model
     public function getMostPopularDish()
     {
         return $this->dishes()
-            ->withCount('orders')
-            ->orderBy('orders_count', 'desc')
+            ->withCount('orderItems')
+            ->orderBy('order_items_count', 'desc')
             ->first();
     }
 

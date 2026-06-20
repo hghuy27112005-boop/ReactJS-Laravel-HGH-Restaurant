@@ -15,6 +15,9 @@ return new class extends Migration
             $table->foreignId('dish_id')->constrained('dishes', 'dish_id');
             $table->integer('quantity'); // Should be > 0 checked in code
             $table->decimal('unit_price', 10, 2)->default(30000);
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent();
+            $table->unique(['order_id', 'dish_id'], 'uq_order_dish');
         });
     }
 

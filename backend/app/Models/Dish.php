@@ -39,14 +39,14 @@ class Dish extends Model
         return $this->belongsTo(DishType::class, 'type_id', 'type_id');
     }
 
-    public function orders()
+    public function orderItems()
     {
-        return $this->hasMany(Order::class, 'dish_id', 'dish_id');
+        return $this->hasMany(OrderItem::class, 'dish_id', 'dish_id');
     }
 
-    public function stocks()
+    public function stock()
     {
-        return $this->hasMany(Stock::class, 'dish_id', 'dish_id');
+        return $this->hasOne(Stock::class, 'dish_id', 'dish_id');
     }
 
     // ============================================
@@ -143,7 +143,7 @@ class Dish extends Model
      */
     public function getOrderCount()
     {
-        return $this->orders()->count();
+        return $this->orderItems()->count();
     }
 
     /**
@@ -151,8 +151,8 @@ class Dish extends Model
      */
     public function getTotalRevenue()
     {
-        return $this->orders()
-            ->sum(\DB::raw('quantity * price_at_order'));
+        return $this->orderItems()
+            ->sum(\DB::raw('quantity * unit_price'));
     }
 
     /**

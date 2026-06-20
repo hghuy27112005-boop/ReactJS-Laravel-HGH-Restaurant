@@ -9,15 +9,47 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('booking_tables', function (Blueprint $table) {
+
             $table->string('booking_id', 20)->primary();
-            $table->string('order_id', 20)->unique();
-            $table->foreign('order_id')->references('order_id')->on('orders')->onDelete('cascade');
-            $table->foreignId('table_type_id')->constrained('table_types', 'table_type_id');
-            $table->integer('quantity')->default(1);
+
+            $table->string('order_id', 20);
+
+            $table->foreign('order_id')
+                ->references('order_id')
+                ->on('orders')
+                ->onDelete('cascade');
+
+            $table->integer('table_number');
+
+            $table->foreign('table_number')
+                ->references('table_number')
+                ->on('restaurant_tables');
+
             $table->date('booking_date');
+
             $table->time('start_time');
+
             $table->time('end_time');
-            $table->enum('booking_status', ['waiting_info', 'waiting_confirmation', 'waiting_payment', 'completed', 'cancelled'])->default('waiting_info');
+
+            $table->enum('B_payment_status', [
+                'unpaid',
+                'paid'
+            ])->default('unpaid');
+
+            $table->enum('booking_status', [
+                'waiting_info',
+                'waiting_confirmation',
+                'waiting_payment',
+                'completed',
+                'cancelled'
+            ])->default('waiting_info');
+
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent();
+
+            $table->index('table_number');
+            $table->index('booking_date');
+
         });
     }
 

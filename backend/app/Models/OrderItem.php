@@ -4,29 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class Delivery extends Model
+class OrderItem extends Model
 {
-    protected $table = 'deliveries';
-    
-    protected $primaryKey = 'delivery_id';
-    public $incrementing = false;
-    protected $keyType = 'string';
+    protected $table = 'order_items';
+    protected $primaryKey = 'order_item_id';
 
     public $timestamps = true;
 
     protected $fillable = [
-        'delivery_id',
         'order_id',
-        'address',
-        'D_payment_status',
-        'delivery_status',
-        'approved_at',
-        'delivered_at',
+        'dish_id',
+        'quantity',
+        'unit_price',
     ];
 
     protected $casts = [
-        'approved_at' => 'datetime',
-        'delivered_at' => 'datetime',
+        'quantity' => 'integer',
+        'unit_price' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -39,5 +33,9 @@ class Delivery extends Model
     {
         return $this->belongsTo(Order::class, 'order_id', 'order_id');
     }
-}
 
+    public function dish()
+    {
+        return $this->belongsTo(Dish::class, 'dish_id', 'dish_id');
+    }
+}

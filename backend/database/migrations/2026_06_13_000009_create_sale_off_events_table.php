@@ -13,6 +13,8 @@ return new class extends Migration
             $table->decimal('sale_off_percentage', 5, 2); // To enforce <= 100, we could add check constraint or handle in app logic
             $table->timestamp('start_time');
             $table->timestamp('end_time');
+            $table->timestamp('created_at')->useCurrent();
+            $table->timestamp('updated_at')->useCurrent();
         });
     }
 

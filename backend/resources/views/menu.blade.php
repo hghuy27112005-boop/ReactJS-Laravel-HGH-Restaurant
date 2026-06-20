@@ -2,177 +2,225 @@
 
 @section('content')
 <style>
-    .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
-    .modal-content { background-color: white; margin: 10% auto; padding: 25px; border-radius: 15px; width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); position: relative; }
-    .close-btn { position: absolute; top: 10px; right: 20px; font-size: 28px; cursor: pointer; color: #aaa; }
-    .close-btn:hover { color: black; }
-    
-    .form-group { margin-bottom: 15px; text-align: left; }
-    .form-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #333; }
-    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-    
-    .confirm-btn { background: #C0392B; color: white; border: none; width: 100%; padding: 12px; border-radius: 8px; font-size: 16px; cursor: pointer; transition: 0.3s; font-weight: bold; }
-    .confirm-btn:hover { background: #a93226; }
+    .menu-wrap { padding: 40px 50px; max-width: 1200px; margin: 0 auto; font-family: 'Segoe UI', sans-serif; }
+    .menu-title { text-align: center; color: #C0392B; font-size: 32px; margin-bottom: 40px; font-weight: 800; letter-spacing: 1px; }
 
-    .dish-card img { transition: 0.3s; cursor: pointer; width: 100%; height: 200px; object-fit: cover; border-radius: 10px; }
-    .dish-card img:hover { opacity: 0.8; transform: scale(1.02); }
-    .dish-card { border: 1px solid #eee; padding: 15px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); transition: 0.3s; }
-    .dish-card:hover { box-shadow: 0 8px 20px rgba(0,0,0,0.1); }
+    .dish-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 28px; }
 
-    .btn-add-action {
-        background: #C0392B; 
-        color: white; 
-        border: none; 
-        padding: 8px 15px; 
-        border-radius: 5px; 
-        cursor: pointer; 
-        font-weight: bold;
-        text-decoration: none;
-        display: inline-block;
-        font-size: 14px;
+    .dish-card {
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.07);
+        background: #fff;
+        transition: transform .2s, box-shadow .2s;
+        border: 1px solid #f0f0f0;
     }
-    .btn-add-action:hover { background: #a93226; }
+    .dish-card:hover { transform: translateY(-4px); box-shadow: 0 10px 28px rgba(0,0,0,0.12); }
+
+    .dish-card img { width: 100%; height: 190px; object-fit: cover; display: block; transition: opacity .2s; }
+    .dish-card img:hover { opacity: .88; }
+
+    .dish-body { padding: 14px 16px 16px; }
+    .dish-body .dish-name { font-size: 16px; font-weight: 700; color: #222; margin: 0 0 6px; line-height: 1.3; }
+    .dish-body .dish-price { font-size: 17px; font-weight: 800; color: #C0392B; margin: 0 0 14px; }
+
+    .btn-add-wrap { display: flex; gap: 8px; }
+    .btn-add {
+        flex: 1;
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+        padding: 9px 10px; border: none; border-radius: 10px;
+        font-size: 13px; font-weight: 700; cursor: pointer; transition: .2s;
+        text-decoration: none; color: #fff;
+    }
+    .btn-ship   { background: #C0392B; }
+    .btn-ship:hover  { background: #a93226; }
+    .btn-table  { background: #2c3e50; }
+    .btn-table:hover { background: #1a252f; }
+
+    /* Guest buttons */
+    .btn-login { background: #95a5a6; }
+    .btn-login:hover { background: #7f8c8d; }
+
+    /* ─── MODAL ─── */
+    .modal { display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,.55); }
+    .modal-box {
+        background: #fff; margin: 9% auto; padding: 0; border-radius: 20px;
+        width: 380px; box-shadow: 0 12px 40px rgba(0,0,0,.2); overflow: hidden; position: relative;
+    }
+    .modal-header {
+        background: #C0392B; color: #fff; padding: 20px 24px 16px;
+    }
+    .modal-header h3 { margin: 0; font-size: 17px; font-weight: 700; }
+    .modal-header .sub { font-size: 13px; opacity: .85; margin-top: 4px; }
+    .modal-close {
+        position: absolute; top: 14px; right: 18px;
+        font-size: 22px; color: rgba(255,255,255,.8); cursor: pointer; line-height: 1;
+    }
+    .modal-close:hover { color: #fff; }
+    .modal-body { padding: 22px 24px; }
+
+    .qty-row { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+    .qty-label { font-size: 14px; font-weight: 600; color: #555; flex: 1; }
+    .qty-ctrl { display: flex; align-items: center; gap: 10px; }
+    .qty-btn {
+        width: 34px; height: 34px; border-radius: 50%; border: 2px solid #C0392B;
+        background: #fff; color: #C0392B; font-size: 18px; font-weight: 700;
+        cursor: pointer; display: flex; align-items: center; justify-content: center; transition: .15s;
+    }
+    .qty-btn:hover { background: #C0392B; color: #fff; }
+    .qty-val { font-size: 20px; font-weight: 800; min-width: 28px; text-align: center; color: #222; }
+
+    .modal-actions { display: flex; gap: 10px; }
+    .btn-modal {
+        flex: 1; padding: 13px; border: none; border-radius: 12px;
+        font-size: 14px; font-weight: 700; cursor: pointer; transition: .2s;
+        display: flex; align-items: center; justify-content: center; gap: 7px; color: #fff;
+    }
+    .btn-modal-ship  { background: #C0392B; }
+    .btn-modal-ship:hover  { background: #a93226; }
+    .btn-modal-table { background: #2c3e50; }
+    .btn-modal-table:hover { background: #1a252f; }
 </style>
 
-<div style="padding: 50px; max-width: 1200px; margin: 0 auto;">
-    <h2 style="text-align: center; color: #C0392B; font-size: 32px; margin-bottom: 40px; font-weight: 800;">THỰC ĐƠN NHÀ HÀNG</h2>
-    
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px;">
+<div class="menu-wrap">
+    <h2 class="menu-title">THỰC ĐƠN NHÀ HÀNG</h2>
+
+    <div class="dish-grid">
         @foreach($danhSachMon as $mon)
             <div class="dish-card">
                 <a href="{{ url('/menu/' . $mon->dish_id) }}">
                     <img src="{{ $mon->image_url }}" alt="{{ $mon->dish_name }}">
                 </a>
 
-                <a href="{{ url('/menu/' . $mon->dish_id) }}" style="text-decoration: none; color: #333;">
-                    <p style="font-weight: bold; font-size: 18px; margin: 15px 0 5px 0;">{{ $mon->dish_name }}</p>
-                </a>
+                <div class="dish-body">
+                    <a href="{{ url('/menu/' . $mon->dish_id) }}" style="text-decoration:none;">
+                        <p class="dish-name">{{ $mon->dish_name }}</p>
+                    </a>
+                    <p class="dish-price">{{ number_format($mon->price, 0, ',', '.') }} VNĐ</p>
 
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                    <p style="color: #C0392B; font-weight: bold; font-size: 17px;">{{ number_format($mon->price, 0, ',', '.') }} VNĐ</p>
-                    
-                    @auth
-                        {{-- Đã đăng nhập: Mở modal đặt món --}}
-                        <button class="btn-add-action" onclick="openOrderModal('{{ $mon->dish_id }}', '{{ $mon->dish_name }}', {{ $mon->price }})">
-                            + Thêm
-                        </button>
-                    @else
-                        {{-- Chưa đăng nhập: Chuyển hướng sang trang đăng nhập --}}
-                        <a href="{{ route('login') }}" class="btn-add-action">
-                            + Thêm
-                        </a>
-                    @endauth
+                    <div class="btn-add-wrap">
+                        @auth
+                            <button class="btn-add btn-ship"
+                                onclick="openModal('{{ $mon->dish_id }}', '{{ addslashes($mon->dish_name) }}', {{ $mon->price }}, 'mang-ve')">
+                                <i class="fas fa-motorcycle"></i> Đặt Ship
+                            </button>
+                            <button class="btn-add btn-table"
+                                onclick="openModal('{{ $mon->dish_id }}', '{{ addslashes($mon->dish_name) }}', {{ $mon->price }}, 'dat-ban')">
+                                <i class="fas fa-chair"></i> Đặt Bàn
+                            </button>
+                        @else
+                            <a href="{{ route('login') }}" class="btn-add btn-login" style="flex:1;">
+                                <i class="fas fa-sign-in-alt"></i> Đăng nhập để đặt
+                            </a>
+                        @endauth
+                    </div>
                 </div>
             </div>
         @endforeach
     </div>
 </div>
 
-{{-- MODAL CHỈ HIỆN KHI ĐÃ ĐĂNG NHẬP (LƯU TRONG DOM) --}}
 @auth
+{{-- ─── MODAL ─── --}}
 <div id="orderModal" class="modal">
-    <div class="modal-content">
-        <span class="close-btn" onclick="closeModal()">&times;</span>
-        <h3 id="modalDishName" style="color: #C0392B; margin-top: 0;"></h3>
-        <hr style="border: 0; border-top: 1px solid #eee; margin-bottom: 20px;">
-        
-        <form id="orderForm">
-            <div class="form-group">
-                <label>Số lượng (Tối đa 10):</label>
-                <input type="number" id="quantity" value="1" min="1" max="10">
+    <div class="modal-box">
+        <span class="modal-close" onclick="closeModal()">&times;</span>
+        <div class="modal-header">
+            <h3 id="modal-dish-name">Tên món</h3>
+            <div class="sub" id="modal-dish-type">Đặt giao hàng</div>
+        </div>
+        <div class="modal-body">
+            <div class="qty-row">
+                <span class="qty-label">Số lượng:</span>
+                <div class="qty-ctrl">
+                    <button class="qty-btn" onclick="changeQty(-1)">−</button>
+                    <span class="qty-val" id="qty-display">1</span>
+                    <button class="qty-btn" onclick="changeQty(1)">+</button>
+                </div>
             </div>
-            <div class="form-group">
-                <label>Hình thức:</label>
-                <select id="orderType">
-                    <option value="mang-ve">Mang về (Giao hàng tận nơi)</option>
-                    <option value="dat-ban">Ăn tại quán (Đặt bàn trước)</option>
-                </select>
+            <div class="modal-actions" id="modal-actions">
+                {{-- Filled by JS --}}
             </div>
-            <div class="form-group">
-                <label>Ghi chú:</label>
-                <textarea id="note" rows="3" placeholder="Ví dụ: Không cay, nhiều hành..."></textarea>
-            </div>
-            <button type="button" class="confirm-btn" onclick="submitOrder()">Xác nhận thêm vào giỏ hàng</button>
-        </form>
+        </div>
     </div>
 </div>
 
 <script>
-    const modal = document.getElementById("orderModal");
-    const qtyInput = document.getElementById("quantity");
-    const CSRF_TOKEN = '{{ csrf_token() }}';
-    
-    let currentDish = { id: '', name: '', price: 0 };
-    let isMouseDownInside = false;
+    const CSRF = '{{ csrf_token() }}';
+    let dish = { id: '', name: '', price: 0, type: 'mang-ve' };
+    let qty = 1;
 
-    function openOrderModal(id, name, price) {
-        currentDish = { id, name, price };
-        document.getElementById("modalDishName").innerText = "Đặt món: " + name;
-        qtyInput.value = 1;
-        document.getElementById("note").value = ""; 
-        modal.style.display = "block";
+    const modal = document.getElementById('orderModal');
+
+    function openModal(id, name, price, type) {
+        dish = { id, name, price, type };
+        qty = 1;
+        document.getElementById('qty-display').innerText = 1;
+        document.getElementById('modal-dish-name').innerText = name;
+
+        const typeLabel = type === 'mang-ve' ? 'Đặt giao hàng tận nơi' : 'Đặt ăn tại bàn';
+        document.getElementById('modal-dish-type').innerText = typeLabel;
+
+        const btnColor   = type === 'mang-ve' ? 'btn-modal-ship' : 'btn-modal-table';
+        const btnIcon    = type === 'mang-ve' ? 'fa-motorcycle' : 'fa-chair';
+        const btnText    = type === 'mang-ve' ? 'Thêm vào Đặt Ship' : 'Thêm vào Đặt Bàn';
+        const redirectUrl = type === 'mang-ve' ? '{{ url("/delivery") }}' : '{{ url("/booking-table") }}';
+
+        document.getElementById('modal-actions').innerHTML = `
+            <button class="btn-modal ${btnColor}" onclick="submitOrder('${redirectUrl}')">
+                <i class="fas ${btnIcon}"></i> ${btnText}
+            </button>
+        `;
+
+        modal.style.display = 'block';
     }
 
-    function closeModal() { 
-        modal.style.display = "none"; 
+    function closeModal() { modal.style.display = 'none'; }
+
+    function changeQty(delta) {
+        qty = Math.max(1, Math.min(10, qty + delta));
+        document.getElementById('qty-display').innerText = qty;
     }
 
-    modal.addEventListener('mousedown', function(e) {
-        isMouseDownInside = e.target.closest('.modal-content');
+    // Close on backdrop click
+    let _inContent = false;
+    modal.addEventListener('mousedown', e => { _inContent = !!e.target.closest('.modal-box'); });
+    modal.addEventListener('mouseup', e => {
+        if (e.target === modal && !_inContent) closeModal();
+        _inContent = false;
     });
 
-    modal.addEventListener('mouseup', function(e) {
-        if (e.target == modal && !isMouseDownInside) {
-            closeModal();
-        }
-        isMouseDownInside = false; 
-    });
-
-    qtyInput.addEventListener("input", function() {
-        if (this.value > 10) this.value = 10;
-        if (this.value < 1 && this.value !== "") this.value = 1;
-    });
-
-    function submitOrder() {
-        let qty = parseInt(qtyInput.value);
-
-        if (isNaN(qty) || qty < 1 || qty > 10) {
-            hghAlert("Vui lòng nhập số lượng từ 1 đến 10!", "warning");
+    function submitOrder(redirectUrl) {
+        if (qty < 1 || qty > 10) {
+            hghAlert('Số lượng phải từ 1 đến 10!', 'warning');
             return;
         }
 
-        fetch('{{ route('cart.add') }}', {
+        fetch('{{ route("cart.add") }}', {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': CSRF_TOKEN
-            },
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': CSRF },
+            credentials: 'same-origin',
             body: JSON.stringify({
-                dish_id: currentDish.id,
-                dish_name: currentDish.name,
-                price: currentDish.price,
+                dish_id: dish.id,
+                dish_name: dish.name,
+                price: dish.price,
                 quantity: qty,
-                order_type: document.getElementById("orderType").value,
-                note: document.getElementById("note").value
+                order_type: dish.type
             })
         })
         .then(res => {
-            if (!res.ok) {
-                return res.json().then(err => { throw err; });
-            }
+            if (!res.ok) return res.json().then(err => { throw err; });
             return res.json();
         })
-        .then(data => {
-            const orderType = document.getElementById("orderType").value;
-            const cartUrl = orderType === 'dat-ban' ? '{{ route('cart.booking') }}' : '{{ route('cart.order') }}';
-            hghAlert(`Thành công! Đã thêm ${qty} ${currentDish.name} vào giỏ hàng.`, "success").then(() => {
-                window.location.href = cartUrl;
-            });
+        .then(() => {
             closeModal();
+            hghAlert(`Đã thêm ${qty} × ${dish.name} vào giỏ!`, 'success').then(() => {
+                window.location.href = redirectUrl;
+            });
         })
         .catch(err => {
             console.error(err);
-            hghAlert(err.message || "Lỗi kết nối server!", "error");
+            hghAlert(err.message || 'Lỗi kết nối server!', 'error');
         });
     }
 </script>
