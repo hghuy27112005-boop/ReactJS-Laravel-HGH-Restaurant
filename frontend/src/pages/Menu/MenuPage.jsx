@@ -260,13 +260,13 @@ const MenuPage = () => {
                                             onClick={() => handleAddToCart(dish, 'mang-ve')}
                                             className="w-full py-2 px-2 rounded border border-red-600 text-red-600 font-semibold bg-white hover:bg-red-600 hover:text-white transition-colors duration-300 text-sm"
                                         >
-                                            <i className="fas fa-motorcycle mr-1"></i> Đặt Ship
+                                            Đặt Ship
                                         </button>
                                         <button
                                             onClick={() => handleAddToCart(dish, 'dat-ban')}
                                             className="w-full py-2 px-2 rounded border border-gray-800 text-gray-800 font-semibold bg-white hover:bg-gray-800 hover:text-white transition-colors duration-300 text-sm"
                                         >
-                                            <i className="fas fa-chair mr-1"></i> Đặt Bàn
+                                            Đặt Bàn
                                         </button>
                                     </div>
                                 </div>

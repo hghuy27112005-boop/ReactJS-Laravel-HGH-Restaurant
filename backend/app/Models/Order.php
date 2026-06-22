@@ -52,6 +52,11 @@ class Order extends Model
         return $this->hasOne(BookingTable::class, 'order_id', 'order_id');
     }
 
+    public function bookings()
+    {
+        return $this->hasMany(BookingTable::class, 'order_id', 'order_id');
+    }
+
     public function delivery()
     {
         return $this->hasOne(Delivery::class, 'order_id', 'order_id');

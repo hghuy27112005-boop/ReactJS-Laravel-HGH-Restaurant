@@ -36,35 +36,30 @@ const CheckoutPage = () => {
             setLoading(true);
             setError(null);
 
-            // Prepare order data
             const orderData = {
-                order_type: orderType,
-                address: formData.address,
-                phone: formData.phone,
-                notes: formData.notes,
-                payment_method: formData.payment_method,
-                items: items.map(item => ({
-                    dish_id: item.dish_id,
-                    quantity: item.quantity,
-                    price: item.dish_price,
-                })),
-                total_amount: totalPrice,
-            };
+            order_type: orderType,
+            address: formData.address,
+            phone: formData.phone,
+            notes: formData.notes,
+            payment_method: formData.payment_method,
+            items: items.map(item => ({
+                dish_id: item.dish_id,
+                quantity: item.quantity,
+                price_at_order: item.dish_price,
+            })),
+        };
 
-            // Create bill
-            const response = await billService.storeBill(orderData);
-            const billId = response.data.data.bill_id;
+        const response = await billAPI.create(orderData);
+        const billId = response.data.data.bill_id;
 
-            // Process payment if not cash
-            if (formData.payment_method !== 'cash') {
-                await billService.processPayment(billId, {
-                    payment_method: formData.payment_method,
-                });
-            }
+        // Luôn thanh toán ngay, vì giờ không còn lựa chọn "tiền mặt" để bỏ qua
+        await billAPI.processPayment(billId, {
+            payment_method: formData.payment_method, // 'credit_card' | 'bank_transfer' | 'momo' v.v.
+            amount: totalPrice,
+        });
 
-            // Clear cart and redirect to confirmation
-            clearCart();
-            navigate(`/order-confirmation/${billId}`);
+        clearCart();
+        navigate(`/order-confirmation/${billId}`);
         } catch (err) {
             setError(err.response?.data?.message || 'Lỗi tạo đơn hàng');
             console.error(err);

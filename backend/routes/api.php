@@ -1,7 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
-
+use App\Http\Controllers\VnpayController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -35,6 +35,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::apiResource('bills', \App\Http\Controllers\BillController::class);
     Route::post('bills/{bill}/calculate-total', [\App\Http\Controllers\BillController::class, 'calculateTotal']);
     Route::post('bills/{bill}/payment', [\App\Http\Controllers\BillController::class, 'processPayment']);
+    Route::get('bills/{bill}/export-pdf', [\App\Http\Controllers\BillController::class, 'exportPDF']);
 
     // Orders
     Route::apiResource('orders', \App\Http\Controllers\OrderController::class);
@@ -48,7 +49,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Booking Tables
     Route::apiResource('booking-tables', \App\Http\Controllers\BookingTableController::class);
-    Route::get('booking-tables/available', [\App\Http\Controllers\BookingTableController::class, 'getAvailable']);
+    Route::post('booking-tables/check-overlap', [\App\Http\Controllers\BookingTableController::class, 'checkMultiOverlap']);
 
     // Points & Statistics
     Route::get('points', [\App\Http\Controllers\PointsController::class, 'userPoints']);
@@ -91,3 +92,6 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::get('admin/statistics/bestsellers', [\App\Http\Controllers\Admin\StatisticsController::class, 'bestsellers']);
     Route::get('admin/statistics/customers', [\App\Http\Controllers\Admin\StatisticsController::class, 'customers']);
 });
+
+Route::post('/vnpay/create-payment-url', [VnpayController::class, 'createPaymentUrl']);
+Route::get('/vnpay/ipn', [VnpayController::class, 'vnpayIpn']);

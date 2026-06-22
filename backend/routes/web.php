@@ -7,6 +7,7 @@ use App\Http\Controllers\OrderController;
 use App\Http\Controllers\DeliveryController;
 use App\Http\Controllers\BookingTableController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\VnpayController;
 
 use App\Models\Dish;
 
@@ -50,6 +51,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/save-booking', [BookingTableController::class, 'saveBooking']);
     Route::post('/check-multi-overlap', [BookingTableController::class, 'checkMultiOverlap']);
     Route::post('/booking-table/checkout', [BookingTableController::class, 'processBookingCheckout'])->name('booking.checkout');
+    Route::post('/booking-table/process-payment', [BookingTableController::class, 'processBookingPayment'])->name('booking_table.process_payment');
 
     // =============================================
     // ORDER / CART ROUTES (shared)
@@ -60,7 +62,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/process-payment', [OrderController::class, 'processPayment'])->name('process_payment');
     Route::get('/transaction-history', [OrderController::class, 'transactionHistory'])->name('transaction_history');
     Route::get('/export-pdf', [OrderController::class, 'exportPDF']);
-
+    
     // Redirect legacy cart URLs
     Route::get('/gio-hang', fn () => redirect()->route('delivery.page'));
     Route::get('/dat-hang', fn () => redirect()->route('delivery.page'))->name('cart.order');
@@ -75,6 +77,8 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/admin/transaction-management', [OrderController::class, 'transactionManagement'])->name('admin.transaction_management');
     });
 });
+
+Route::get('/vnpay/return', [VnpayController::class, 'vnpayReturn']);
 
 Route::get('/clear', function () {
     session()->flush();

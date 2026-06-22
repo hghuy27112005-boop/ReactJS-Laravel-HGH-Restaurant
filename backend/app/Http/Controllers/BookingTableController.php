@@ -11,21 +11,23 @@ use App\Models\Bill;
 
 class BookingTableController extends Controller
 {
+    private const TYPE = 'dat-ban';
+
     /**
      * Load the checkout page for booking table
      */
     public function bookingCheckoutPage()
     {
         $userId = auth()->id();
-        $type = 'dat-ban';
+        $type = self::TYPE;
 
         // Find pending booking for recovery if needed
         $pendingOrder = Order::where('user_id', $userId)
             ->where('order_type', 'booking')
-            ->whereHas('bookingTable', function ($q) {
+            ->whereHas('bookings', function ($q) {
                 $q->where('B_payment_status', 'unpaid');
             })
-            ->with(['items.dish', 'bookingTable'])
+            ->with(['items.dish', 'bookings'])
             ->first();
 
         if ($pendingOrder && !session()->has("last_confirmed_{$type}")) {
@@ -42,24 +44,20 @@ class BookingTableController extends Controller
             }
 
             if (!$hasItems) {
-                foreach ($pendingOrder->items as $d) {
-                    $cartKey = $d->dish_id . '_' . $type;
-                    $cart[$cartKey] = [
-                        "dish_id" => $d->dish_id,
-                        "name" => $d->dish->dish_name,
-                        "quantity" => $d->quantity,
-                        "price" => $d->unit_price,
-                        "order_type" => $type,
-                        "note" => null,
-                        "created_at" => $pendingOrder->created_at->format('H:i d/m/Y')
-                    ];
-                }
+                $cart = array_merge(
+                    $cart,
+                    $this->buildCartFromOrderItems(
+                        $pendingOrder,
+                        $type,
+                        $pendingOrder->created_at->format('H:i d/m/Y')
+                    )
+                );
                 session()->put('cart', $cart);
             }
         }
 
         $cart = session()->get('cart', []);
-        $cartMode = 'dat-ban';
+        $cartMode = self::TYPE;
 
         return view('booking_table', compact('cart', 'cartMode'));
     }
@@ -119,11 +117,9 @@ class BookingTableController extends Controller
                     ->first();
 
                 if ($overlap) {
-                    $readableStart = \Carbon\Carbon::parse($overlap->start_time)->format('H:i');
-                    $readableEnd = \Carbon\Carbon::parse($overlap->end_time)->format('H:i');
                     return response()->json([
                         'status' => 'error',
-                        'message' => 'Bàn số ' . $num . ' đã có người đặt từ ' . $readableStart . ' đến ' . $readableEnd
+                        'message' => 'Bàn số ' . $num . ' đã được đặt trong khoảng thời gian này, vui lòng chọn bàn khác hoặc đổi thời gian.'
                     ], 422);
                 }
             }
@@ -135,11 +131,11 @@ class BookingTableController extends Controller
     }
 
     /**
-     * Process checkout for booking
+     * Process checkout for booking (bước "Xác nhận thông tin đặt bàn" — chưa thanh toán)
      */
     public function processBookingCheckout(Request $request)
     {
-        $type = 'dat-ban';
+        $type = self::TYPE;
         $cart = session()->get('cart', []);
 
         $itemsToConfirm = array_filter($cart, function ($item) use ($type) {
@@ -159,7 +155,7 @@ class BookingTableController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Vui lòng chọn bàn trước khi xác nhận!'], 400);
         }
 
-        // Validate overlap again
+        // Validate overlap again — kiểm tra TỪNG bàn trong danh sách đã chọn
         foreach ($tables as $t) {
             $overlap = DB::table('booking_tables')
                 ->join('bills', 'booking_tables.order_id', '=', 'bills.order_id')
@@ -185,43 +181,49 @@ class BookingTableController extends Controller
             $oldBillCode = session('last_bill_code_' . $type);
             $bill = Bill::where('bill_id', $oldBillCode)->first();
 
-            // We handle only 1 table per order in the new schema (BookingTable has order_id).
-            // If they chose multiple tables, we might need multiple orders, or change DB.
-            // Assuming 1 table for simplicity as per DB: `booking_tables` (booking_id, order_id, table_number).
-            // If multiple, just use the first one for now or adjust DB later.
-            $primaryTableNumber = $tables[0]['number'];
+            $isEditingPendingOrder = $bill
+                && $bill->order
+                && optional($bill->order->bookings->first())->B_payment_status === 'unpaid';
 
-            if ($bill && $bill->order && $bill->order->bookingTable && $bill->order->bookingTable->B_payment_status == 'unpaid') {
+            if ($isEditingPendingOrder) {
                 $order = $bill->order;
                 $order->items()->delete();
                 $order->update(['subtotal_price' => $totalAmount]);
                 $bill->update(['total_price' => $totalAmount]);
-                $order->bookingTable->update([
-                    'table_number' => $primaryTableNumber,
-                    'booking_date' => $bookingDate,
-                    'start_time' => $startTime,
-                    'end_time' => $endTime
-                ]);
+
+                // Xóa hết các dòng bàn cũ rồi lưu lại đầy đủ danh sách bàn mới
+                $order->bookings()->delete();
+                foreach ($tables as $t) {
+                    BookingTable::create([
+                        'order_id' => $order->order_id,
+                        'table_number' => $t['number'],
+                        'booking_date' => $bookingDate,
+                        'start_time' => $startTime,
+                        'end_time' => $endTime,
+                        'B_payment_status' => 'unpaid',
+                        'booking_status' => 'pending'
+                    ]);
+                }
             } else {
-                // Create Order
                 $order = Order::create([
                     'user_id' => auth()->id(),
                     'order_type' => 'booking',
                     'subtotal_price' => $totalAmount
                 ]);
 
-                // Create BookingTable
-                BookingTable::create([
-                    'order_id' => $order->order_id,
-                    'table_number' => $primaryTableNumber,
-                    'booking_date' => $bookingDate,
-                    'start_time' => $startTime,
-                    'end_time' => $endTime,
-                    'B_payment_status' => 'unpaid',
-                    'booking_status' => 'pending'
-                ]);
+                // Lưu ĐẦY ĐỦ tất cả các bàn đã chọn (không chỉ bàn đầu tiên)
+                foreach ($tables as $t) {
+                    BookingTable::create([
+                        'order_id' => $order->order_id,
+                        'table_number' => $t['number'],
+                        'booking_date' => $bookingDate,
+                        'start_time' => $startTime,
+                        'end_time' => $endTime,
+                        'B_payment_status' => 'unpaid',
+                        'booking_status' => 'pending'
+                    ]);
+                }
 
-                // Create Bill
                 $bill = Bill::create([
                     'order_id' => $order->order_id,
                     'total_price' => $totalAmount,
@@ -229,7 +231,6 @@ class BookingTableController extends Controller
                 ]);
             }
 
-            // Insert new items
             foreach ($itemsToConfirm as $item) {
                 OrderItem::create([
                     'order_id' => $order->order_id,
@@ -255,5 +256,151 @@ class BookingTableController extends Controller
             \Log::error('Booking Checkout failed: ' . $e->getMessage());
             return response()->json(['status' => 'error', 'message' => 'Lỗi lưu đơn hàng: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Bước "Thanh toán" — xử lý khi người dùng bấm nút Thanh Toán.
+     * Vì chưa tích hợp cổng thanh toán thật, hàm này giả lập thanh toán
+     * thành công, nhưng vẫn kiểm tra overlap LẦN CUỐI trước khi chốt,
+     * để xử lý đúng trường hợp 2 người cùng đặt trùng bàn/giờ.
+     */
+    public function processBookingPayment(Request $request)
+    {
+        $type = self::TYPE;
+
+        try {
+            DB::beginTransaction();
+
+            $billId = $request->input('bill_code') ?: session()->get('last_bill_code_' . $type);
+
+            if (!$billId) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Không tìm thấy hóa đơn. Vui lòng xác nhận thông tin đặt bàn trước.'
+                ], 400);
+            }
+
+            $bill = Bill::with(['order.bookings', 'order.items.dish'])
+                ->where('bill_id', $billId)
+                ->first();
+
+            if (!$bill || !$bill->order || $bill->order->bookings->isEmpty()) {
+                DB::rollBack();
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hóa đơn hoặc thông tin đặt bàn không tồn tại.'
+                ], 404);
+            }
+
+            // Đã thanh toán trước đó (double click / reload) -> trả success luôn, tránh xử lý 2 lần
+            if ($bill->order->bookings->first()->B_payment_status === 'paid') {
+                DB::rollBack();
+                session(['paid_' . $type => true]);
+                return response()->json(['status' => 'success']);
+            }
+
+            // KIỂM TRA LẦN CUỐI: kiểm tra TỪNG bàn trong đơn xem có ai vừa thanh toán trùng không
+            foreach ($bill->order->bookings as $bt) {
+                $overlap = DB::table('booking_tables')
+                    ->join('bills', 'booking_tables.order_id', '=', 'bills.order_id')
+                    ->where('booking_tables.order_id', '!=', $bill->order_id)
+                    ->where('booking_tables.table_number', $bt->table_number)
+                    ->where('booking_tables.booking_date', $bt->booking_date)
+                    ->where('booking_tables.B_payment_status', 'paid')
+                    ->where('booking_tables.booking_status', '!=', 'cancelled')
+                    ->whereRaw("booking_tables.start_time < ? AND booking_tables.end_time > ?", [
+                        $bt->end_time,
+                        $bt->start_time
+                    ])
+                    ->select('bills.bill_id')
+                    ->first();
+
+                if ($overlap) {
+                    // ROLLBACK: khôi phục lại giỏ hàng cho người dùng
+                    $cart = session()->get('cart', []);
+                    $cart = array_merge($cart, $this->buildCartFromOrderItems($bill->order, $type));
+
+                    session()->put('cart', $cart);
+                    session()->put('last_confirmed_' . $type, false);
+                    // KHÔNG forget last_bill_code_{$type} để processBookingCheckout
+                    // tìm thấy đơn cũ và ghi đè (update) thay vì tạo mới.
+
+                    DB::commit();
+
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Rất tiếc, bàn số ' . $bt->table_number .
+                            ' vừa có người khác thanh toán trước trong khung giờ bạn chọn. Giỏ hàng của bạn đã được khôi phục, vui lòng chọn lại bàn/giờ khác!'
+                    ], 422);
+                }
+            }
+
+            // Không có xung đột -> giả lập thanh toán thành công (chưa có cổng thanh toán thật)
+            foreach ($bill->order->bookings as $bt) {
+                $bt->update([
+                    'B_payment_status' => 'paid',
+                    'booking_status' => 'confirmed',
+                ]);
+            }
+
+            $bill->update([
+                'payment_method' => $request->input('payment_method', 'cash'),
+            ]);
+
+            DB::commit();
+
+            session(['paid_' . $type => true]);
+
+            // Dọn dẹp session đặt bàn vì đã hoàn tất
+            session()->forget([
+                'table_numbers',
+                'tables_detail',
+                'start_date',
+                'start_time',
+                'end_time',
+                'total_tables',
+                'types',
+                'table_number'
+            ]);
+
+            return response()->json(['status' => 'success']);
+
+        } catch (\Throwable $e) {
+            if (DB::transactionLevel() > 0) {
+                DB::rollBack();
+            }
+            \Log::error('processBookingPayment failed: ' . $e->getMessage());
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Lỗi xử lý thanh toán: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Helper: build cart entries từ các món trong 1 Order, dùng chung cho
+     * cả 2 trường hợp khôi phục (load lại trang & xung đột lúc thanh toán)
+     * để tránh lặp code.
+     */
+    private function buildCartFromOrderItems($order, string $type, ?string $createdAt = null): array
+    {
+        $createdAt = $createdAt ?? now()->format('H:i d/m/Y');
+        $items = [];
+
+        foreach ($order->items as $d) {
+            $cartKey = $d->dish_id . '_' . $type;
+            $items[$cartKey] = [
+                "dish_id" => $d->dish_id,
+                "name" => $d->dish->dish_name ?? 'Món ăn đã bị xóa',
+                "quantity" => $d->quantity,
+                "price" => $d->unit_price,
+                "order_type" => $type,
+                "note" => null,
+                "created_at" => $createdAt
+            ];
+        }
+
+        return $items;
     }
 }

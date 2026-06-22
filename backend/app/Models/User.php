@@ -49,6 +49,16 @@ class User extends Authenticatable
         return $this->hasMany(Order::class, 'user_id', 'user_id');
     }
 
+    public function points()
+    {
+        return $this->hasMany(Points::class, 'user_id', 'user_id');
+    }
+
+    public function statistics()
+    {
+        return $this->hasOne(Statistics::class, 'user_id', 'user_id');
+    }
+
     // ============================================
     // HELPER METHODS
     // ============================================
@@ -59,5 +69,30 @@ class User extends Authenticatable
     public function isAdmin()
     {
         return $this->role === 'admin';
+    }
+
+    /**
+     * Cộng điểm thưởng vào tổng điểm hiện có của user.
+     *
+     * Placeholder tạm: chưa có cột "points"/"total_points" riêng trên
+     * bảng users theo migration hiện tại — nếu sau này thêm cột đó, sửa
+     * lại hàm này để $this->increment('points', $amount). Hiện tại điểm
+     * tổng được phản ánh qua Statistics::total_points (xem statistics()).
+     */
+    public function incrementPoints(int $amount): void
+    {
+        // Không làm gì thêm ở đây — Statistics::addPoints() trong
+        // BillController/VnpayController đã là nguồn ghi nhận tổng điểm.
+        // Giữ method này để các lời gọi hiện có không bị lỗi "method không tồn tại".
+    }
+
+    /**
+     * Lấy (hoặc tạo nếu chưa có) bản ghi statistics của user này.
+     * Dùng thay cho $user->statistics khi cần đảm bảo luôn có record,
+     * tránh lỗi gọi method trên null ở lần thanh toán đầu tiên của user.
+     */
+    public function getOrCreateStatistics(): Statistics
+    {
+        return $this->statistics ?? Statistics::create(['user_id' => $this->user_id]);
     }
 }

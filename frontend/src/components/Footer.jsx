@@ -6,7 +6,7 @@ const Footer = () => {
     const { user, isAuthenticated } = useAuthContext();
     const location = useLocation();
     
-    if (location.pathname.startsWith('/menu') || (isAuthenticated && (user?.role === 'admin' || user?.authority === 'Admin'))) {
+    if (location.pathname.startsWith('/menu') || (isAuthenticated && user?.role === 'admin')) {
         return null;
     }
 

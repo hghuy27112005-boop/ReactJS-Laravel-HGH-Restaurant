@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Base API URL
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://magnetism-obsessive-emit.ngrok-free.dev/api';
 
 const axiosInstance = axios.create({
     baseURL: API_BASE_URL,
@@ -62,6 +62,8 @@ export const billAPI = {
     calculateTotal: (id) => axiosInstance.post(`/bills/${id}/calculate-total`),
     processPayment: (id, paymentData) =>
         axiosInstance.post(`/bills/${id}/payment`, paymentData),
+    exportPdf: (billId) =>
+        axiosInstance.get(`/bills/${billId}/export-pdf`, { responseType: 'blob' }),
 };
 
 // User order history (session cart / Blade checkout flow)
@@ -189,11 +191,13 @@ export const billService = {
     getBills: (filters) => myBillsAPI.getAll(filters),
     storeBill: (data) => billAPI.create(data),
     processPayment: (id, data) => billAPI.processPayment(id, data),
+    exportPdf: (billId) => billAPI.exportPdf(billId),
 };
 
 export const bookingService = {
     getBookings: () => myBillsAPI.getAll({ order_type: 'booking_table' }),
     createBooking: (data) => bookingTableAPI.create(data),
+    checkOverlap: (data) => axiosInstance.post('/booking-tables/check-overlap', data),
     updateBooking: (id, data) => bookingTableAPI.update(id, data),
     deleteBooking: (id) => bookingTableAPI.delete(id),
     cancelBooking: (id) => bookingTableAPI.delete(id),
@@ -203,6 +207,14 @@ export const deliveryService = {
     getDeliveries: () => myBillsAPI.getAll({ order_type: 'delivery' }),
     approveDelivery: (id) => deliveryAPI.approve(id),
     startDelivery: (id) => deliveryAPI.startDelivery(id),
+};
+
+export const vnpayAPI = {
+    createPaymentUrl: (data) => axiosInstance.post('/vnpay/create-payment-url', data),
+};
+
+export const vnpayService = {
+    createPaymentUrl: (data) => vnpayAPI.createPaymentUrl(data),
 };
 
 export default axiosInstance;

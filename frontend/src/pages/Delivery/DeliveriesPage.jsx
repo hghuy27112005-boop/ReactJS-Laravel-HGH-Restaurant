@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { deliveryService, billService, extractListData } from '../../services/api';
+import { deliveryService, billService, vnpayService, extractListData } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState, Modal } from '../../components/Shared';
 
 const DeliveriesPage = () => {
@@ -11,7 +11,7 @@ const DeliveriesPage = () => {
     // Cart states
     const [deliveryCart, setDeliveryCart] = useState([]);
     const [address, setAddress] = useState('');
-    const [checkoutStage, setCheckoutStage] = useState('info'); // info, payment, processing
+    const [checkoutStage, setCheckoutStage] = useState('info'); // info, payment
     const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
 
     useEffect(() => {
@@ -33,40 +33,62 @@ const DeliveriesPage = () => {
         setCheckoutStage('payment');
     };
 
+    /**
+     * Cho phép giảm số lượng về 0 — khi về 0 thì tự xóa món đó khỏi giỏ,
+     * thay vì chặn cứng ở mức 1 như trước. Người dùng chỉ muốn bỏ 1 món
+     * lẻ thì bấm trừ liên tục là được, không cần dùng "Xóa tất cả món".
+     */
+    const handleCartQuantityChange = (idx, amount) => {
+        setDeliveryCart(prev => {
+            const updated = prev
+                .map((item, i) => {
+                    if (i !== idx) return item;
+                    const newQty = item.quantity + amount;
+                    return { ...item, quantity: newQty };
+                })
+                .filter(item => item.quantity > 0); // tự loại bỏ món đã về 0
+
+            localStorage.setItem('delivery_cart', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
     const handlePayment = async () => {
-        setCheckoutStage('processing');
-        
-        // Giả bộ load load 1 tí (2 giây)
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
         try {
             const orderData = {
                 order_type: 'delivery',
                 delivery: {
                     address: address,
-                    phone: 'N/A', // Backend requires delivery.phone
+                    phone: 'N/A',
                 },
-                payment_method: 'cash',
+                payment_method: 'vnpay',
                 items: deliveryCart.map(item => ({
                     dish_id: item.dish_id,
                     quantity: item.quantity,
                     price_at_order: item.price,
                 })),
-                total_amount: cartTotal,
             };
 
-            await billService.storeBill(orderData);
-            
-            localStorage.removeItem('delivery_cart');
-            setDeliveryCart([]);
-            setAddress('');
-            setCheckoutStage('info');
-            
-            fetchDeliveries();
-            alert('Thanh toán thành công! Đơn hàng của bạn đã được chuyển xuống danh sách chờ.');
+            // 1. Tạo bill trước (chưa thanh toán)
+            const billRes = await billService.storeBill(orderData);
+            const billId = billRes.data.data.bill_id;
+
+            // 2. Lấy URL thanh toán VNPay
+            const vnpayRes = await vnpayService.createPaymentUrl({
+                bill_id: billId,
+                amount: cartTotal,
+                order_type: 'delivery',
+            });
+
+            // 3. Redirect sang VNPay (rời khỏi app) ngay khi có URL —
+            // không còn màn hình "Đang xử lý thanh toán..." giả nữa,
+            // vì bước tiếp theo (trang VNPAY thật) đã đủ làm rõ là đang xử lý.
+            window.location.href = vnpayRes.data.payment_url;
+
+            // Không cần dọn cart/localStorage ở đây nữa,
+            // vì sẽ làm ở PaymentResultPage sau khi quay về thành công
         } catch (err) {
             setError(err.response?.data?.message || 'Lỗi đặt hàng');
-            setCheckoutStage('payment'); // Revert back to payment if failed
         }
     };
 
@@ -121,7 +143,7 @@ const DeliveriesPage = () => {
 
                 {/* Upper Half: Đặt hàng cố định */}
                 <div className="bg-white rounded-lg shadow p-6 mb-8 border-t-4 border-red-600">
-                    <h2 className="text-2xl font-bold mb-4"><i className="fas fa-motorcycle"></i> Quầy đặt hàng (Ship)</h2>
+                    <h2 className="text-2xl font-bold mb-4">Góc đặt hàng (Ship)</h2>
                     
                     {deliveryCart.length === 0 ? (
                         <div className="text-center py-8 text-gray-500">
@@ -132,23 +154,55 @@ const DeliveriesPage = () => {
                         <div className="grid md:grid-cols-2 gap-8">
                             <div>
                                 <h3 className="font-semibold mb-2">Món đã chọn:</h3>
-                                <ul className="space-y-2 mb-4">
-                                    {deliveryCart.map((item, idx) => (
-                                        <li key={idx} className="flex justify-between border-b pb-2">
-                                            <span>{item.name} x{item.quantity}</span>
-                                            <span className="font-bold text-red-600">{(item.price * item.quantity).toLocaleString('vi-VN')}đ</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                                <div className="text-xl font-bold flex justify-between mt-4 border-t pt-4">
-                                    <span>Tổng cộng:</span>
-                                    <span className="text-red-600">{cartTotal.toLocaleString('vi-VN')}đ</span>
-                                </div>
+                                <table className="w-full mb-4 text-sm bg-white border border-black border-t-4 border-t-red-600">
+                                    <thead>
+                                        <tr>
+                                            <th className="text-left py-2 px-3 font-semibold text-gray-700 border border-black">Món</th>
+                                            <th className="text-center py-2 px-3 font-semibold text-gray-700 border border-black">Số lượng</th>
+                                            <th className="text-right py-2 px-3 font-semibold text-gray-700 border border-black">Thành tiền</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {deliveryCart.map((item, idx) => (
+                                            <tr key={idx}>
+                                                <td className="py-2 px-3 border border-black">{item.name}</td>
+                                                <td className="py-2 px-3 border border-black">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <button
+                                                            onClick={() => handleCartQuantityChange(idx, -1)}
+                                                            className="w-6 h-6 rounded-full border border-red-600 text-red-600 font-bold flex items-center justify-center hover:bg-red-600 hover:text-white transition"
+                                                        >
+                                                            -
+                                                        </button>
+                                                        <span className="w-6 text-center font-semibold">{item.quantity}</span>
+                                                        <button
+                                                            onClick={() => handleCartQuantityChange(idx, 1)}
+                                                            className="w-6 h-6 rounded-full border border-red-600 text-red-600 font-bold flex items-center justify-center hover:bg-red-600 hover:text-white transition"
+                                                        >
+                                                            +
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                                <td className="py-2 px-3 text-right font-bold text-red-600 border border-black">
+                                                    {(item.price * item.quantity).toLocaleString('vi-VN')}đ
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <td colSpan={2} className="py-2 px-3 font-bold text-lg border border-black">Tổng cộng:</td>
+                                            <td className="py-2 px-3 text-right font-bold text-lg text-red-600 border border-black">
+                                                {cartTotal.toLocaleString('vi-VN')}đ
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
                                 <button 
                                     onClick={() => { localStorage.removeItem('delivery_cart'); setDeliveryCart([]); }}
-                                    className="mt-4 text-sm text-red-500 hover:underline"
+                                    className="mt-4 px-4 py-2 text-sm font-bold rounded border-2 border-red-600 text-red-600 bg-white hover:bg-red-600 hover:text-white transition"
                                 >
-                                    Xóa giỏ hàng
+                                    Xóa tất cả món
                                 </button>
                             </div>
                             <div>
@@ -181,14 +235,9 @@ const DeliveriesPage = () => {
                                         </div>
                                         <button 
                                             onClick={handlePayment}
-                                            disabled={checkoutStage === 'processing'} 
-                                            className="w-full bg-green-600 text-white font-bold py-3 rounded hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                                            className="w-full bg-green-600 text-white font-bold py-3 rounded hover:bg-green-700 transition flex items-center justify-center gap-2"
                                         >
-                                            {checkoutStage === 'processing' ? (
-                                                <><i className="fas fa-spinner fa-spin"></i> Đang xử lý thanh toán...</>
-                                            ) : (
-                                                <><i className="fas fa-credit-card"></i> Thanh toán</>
-                                            )}
+                                            <i className="fas fa-credit-card"></i> Thanh toán
                                         </button>
                                     </div>
                                 )}
@@ -263,7 +312,7 @@ const DeliveriesPage = () => {
                                     </div>
                                     <div>
                                         <p className="text-sm text-gray-600">Tổng tiền</p>
-                                        <p className="font-bold text-red-600">{Number(bill.subtotal_price || 0).toLocaleString('vi-VN')}đ</p>
+                                        <p className="font-bold text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</p>
                                     </div>
                                 </div>
 

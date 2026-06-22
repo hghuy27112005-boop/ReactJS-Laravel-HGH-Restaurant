@@ -28,10 +28,10 @@ class BookingTable extends Model
     protected $casts = [
         'table_number' => 'integer',
         'booking_date' => 'date',
-        'start_time' => 'datetime:H:i:s',
-        'end_time' => 'datetime:H:i:s',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
+        'start_time'   => 'string',
+        'end_time'     => 'string',
+        'created_at'   => 'datetime',
+        'updated_at'   => 'datetime',
     ];
 
     /*

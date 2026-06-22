@@ -35,5 +35,21 @@ class Bill extends Model
     {
         return $this->belongsTo(Order::class, 'order_id', 'order_id');
     }
+
+    public function delivery()
+    {
+        return $this->hasOneThrough(
+            Delivery::class, Order::class,
+            'order_id', 'order_id', 'order_id', 'order_id'
+        );
+    }
+
+    public function bookingTable()
+    {
+        return $this->hasManyThrough(
+            BookingTable::class, Order::class,
+            'order_id', 'order_id', 'order_id', 'order_id'
+        );
+    }
 }
 

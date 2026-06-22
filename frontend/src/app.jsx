@@ -7,6 +7,7 @@ import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
+import PaymentResultPage from './pages/Payment/PaymentResultPage';
 
 // Pages
 import HomeApp from './pages/Home/HomeApp';
@@ -84,6 +85,9 @@ function App() {
               <Route path="/admin/analytics" element={<ProtectedRoute requireAdmin={true}><AnalyticsDashboardPage /></ProtectedRoute>} />
               <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminSettingsPage /></ProtectedRoute>} />
 
+              {/*Payment*/}
+              <Route path="/payment-result" element={<PaymentResultPage />} />
+
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
@@ -95,5 +99,8 @@ function App() {
 }
 
 // Mount App to #app
-const root = createRoot(document.getElementById('app'));
-root.render(<App />);
+const container = document.getElementById('app');
+if (container) {
+  const root = createRoot(container);
+  root.render(<App />);
+}

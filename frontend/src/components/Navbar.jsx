@@ -19,7 +19,7 @@ const Navbar = () => {
 
             <nav className="main-nav">
                 {isAuthenticated ? (
-                    user?.role === 'admin' || user?.role === 'staff' ? (
+                    user?.role === 'admin' ? (
                         <>
                             <Link to="/admin/dashboard" className={isActive('/admin/dashboard') ? 'active' : ''}>Dashboard</Link>
                             <Link to="/admin/sales" className={isActive('/admin/sales') ? 'active' : ''}>Doanh thu</Link>

@@ -256,15 +256,58 @@ class OrderController extends Controller
         $query = Order::where('user_id', auth()->id());
 
         if ($request->filled('order_type')) {
-            $query->where('order_type', $request->order_type); // 'booking' or 'delivery'
+            $query->where('order_type', $request->order_type);
         }
 
-        $orders = $query->with(['bill', 'items.dish', 'booking', 'delivery'])
+        $orders = $query->with(['bill', 'items.dish', 'bookings', 'delivery'])
             ->orderByDesc('created_at')
             ->limit(100)
             ->get();
 
-        return response()->json(['data' => $orders]);
+        // Flatten to bill-centric objects so frontend can read bill_id, booking_table, delivery etc.
+        $data = $orders->map(function ($order) {
+            $bill = $order->bill;
+            if (!$bill) return null;
+
+            // All booking rows for this order (one per table)
+            $bookingRows = $order->bookings;
+            $firstBooking = $bookingRows->first();
+
+            return [
+                'bill_id'        => $bill->bill_id,
+                'order_id'       => $order->order_id,
+                'order_type'     => $order->order_type,
+                'total_price'    => $bill->total_price,
+                'payment_method' => $bill->payment_method,
+                'is_paid'        => $bill->payment_method !== 'unpaid',
+                'status'         => $bill->payment_method !== 'unpaid' ? 'paid' : 'unpaid',
+                'created_at'     => $order->created_at,
+                'booking_table'  => $firstBooking ? [
+                    // Shared info (same for all tables in this order)
+                    'booking_date'     => $firstBooking->booking_date,
+                    'start_time'       => $firstBooking->start_time,
+                    'end_time'         => $firstBooking->end_time,
+                    'B_payment_status' => $firstBooking->B_payment_status,
+                    'booking_status'   => $firstBooking->booking_status,
+                    // All table numbers for this order
+                    'table_numbers'    => $bookingRows->pluck('table_number')->sort()->values(),
+                ] : null,
+                'delivery' => $order->delivery ? [
+                    'delivery_id'      => $order->delivery->delivery_id,
+                    'address'          => $order->delivery->address,
+                    'D_payment_status' => $order->delivery->D_payment_status,
+                    'delivery_status'  => $order->delivery->delivery_status,
+                ] : null,
+                'items' => $order->items->map(fn ($item) => [
+                    'dish_id'    => $item->dish_id,
+                    'dish_name'  => $item->dish?->dish_name,
+                    'quantity'   => $item->quantity,
+                    'unit_price' => $item->unit_price,
+                ]),
+            ];
+        })->filter()->values();
+
+        return response()->json(['data' => $data]);
     }
 
     public function exportPDF(Request $request)
