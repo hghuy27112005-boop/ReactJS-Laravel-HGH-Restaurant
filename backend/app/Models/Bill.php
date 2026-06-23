@@ -18,6 +18,9 @@ class Bill extends Model
         'bill_id',
         'order_id',
         'total_price',
+        'subtotal_before_points_discount',  // thêm
+        'points_used',                       // thêm
+        'points_discount_amount',            // thêm
         'payment_method',
         'created_at',
     ];

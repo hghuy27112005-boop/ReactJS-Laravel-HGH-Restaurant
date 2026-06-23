@@ -131,12 +131,19 @@ class VnpayController extends Controller
             Log::warning('vnpayReturn invalid signature', ['txn_ref' => $vnp_TxnRef]);
         }
 
+        // ✅ Lấy order_type từ bill để truyền về frontend
+        $orderType = 'delivery'; // default
+        if ($billId) {
+            $bill = Bill::with('order')->where('bill_id', $billId)->first();
+            $orderType = $bill?->order?->order_type ?? 'delivery';
+        }
+
         $frontendUrl  = config('app.frontend_url', 'http://localhost:5173');
         $status       = $result['is_success'] ? 'success' : 'failed';
         $responseCode = $result['data']['vnp_ResponseCode'] ?? '99';
 
         return redirect()->away(
-            "{$frontendUrl}/payment/result?bill_id={$billId}&status={$status}&code={$responseCode}"
+            "{$frontendUrl}/payment-result?bill_id={$billId}&status={$status}&code={$responseCode}&order_type={$orderType}"
         );
     }
 

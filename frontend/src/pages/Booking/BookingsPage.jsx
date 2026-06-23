@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { bookingService, billService, extractListData } from '../../services/api';
+import { bookingService, billService, vnpayService, extractListData } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState, Modal } from '../../components/Shared';
+
 
 const BookingsPage = () => {
     const [bookings, setBookings] = useState([]);
@@ -160,8 +161,6 @@ const BookingsPage = () => {
     const handlePayment = async () => {
         setCheckoutStage('processing');
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
         try {
             const orderData = {
                 order_type: 'booking_table',
@@ -171,26 +170,26 @@ const BookingsPage = () => {
                     start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
                     end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
                 },
-                payment_method: 'cash',
                 items: bookingCart.map(item => ({
                     dish_id: item.dish_id,
                     quantity: item.quantity,
-                    price_at_order: item.price,
                 })),
-                total_amount: cartTotal,
             };
 
-            await billService.storeBill(orderData);
+            // 1. Tạo bill trước
+            const response = await billService.storeBill(orderData);
+            const billId = response.data.data.bill_id;
 
-            localStorage.removeItem('booking_cart');
-            setBookingCart([]);
-            setWizardStep(1);
-            setTotalTables(1);
-            setSelectedTables([]);
-            setCheckoutStage('wizard');
+            // 2. Lấy URL thanh toán VNPay
+            const vnpayRes = await vnpayService.createPaymentUrl({
+                bill_id: billId,
+                amount: cartTotal,
+                order_type: 'booking_table',
+            });
 
-            fetchBookings();
-            alert('Đặt bàn & thanh toán thành công! Đơn của bạn đã được chuyển xuống danh sách chờ.');
+            // 3. Redirect sang VNPay — dọn cart sau khi quay về ở PaymentResultPage
+            window.location.href = vnpayRes.data.payment_url;
+
         } catch (err) {
             setError(err.response?.data?.message || 'Lỗi đặt bàn');
             setCheckoutStage('payment');
@@ -527,7 +526,7 @@ const BookingsPage = () => {
                                             {checkoutStage === 'processing' ? (
                                                 <><i className="fas fa-spinner fa-spin"></i> Đang xử lý thanh toán...</>
                                             ) : (
-                                                <><i className="fas fa-credit-card"></i> Thanh toán (Tiền mặt / Bank)</>
+                                                <><i className="fas fa-credit-card"></i> Thanh toán</>
                                             )}
                                         </button>
                                         <button

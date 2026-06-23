@@ -10,6 +10,7 @@ const PaymentResultPage = () => {
     const [searchParams] = useSearchParams();
     const [result, setResult] = useState(null);
     const [verifying, setVerifying] = useState(true);
+    const [orderType, setOrderType] = useState('delivery');
     const pollCountRef = useRef(0);
 
     useEffect(() => {
@@ -18,6 +19,9 @@ const PaymentResultPage = () => {
         const status  = searchParams.get('status');   // 'success' | 'failed'
         const code    = searchParams.get('code');     // vnp_ResponseCode gốc
         const billId  = searchParams.get('bill_id');
+        const type    = searchParams.get('order_type');
+
+        setOrderType(type || 'delivery');
 
         // Hiển thị kết quả tạm thời ngay (UX nhanh), dựa theo query string.
         setResult({
@@ -134,7 +138,7 @@ const PaymentResultPage = () => {
                         Về trang chủ
                     </Link>
                     <Link
-                        to="/deliveries"
+                        to={orderType === 'booking_table' ? '/bookings' : '/deliveries'}
                         className="px-5 py-2 rounded bg-red-600 text-white font-semibold hover:bg-red-700 transition"
                     >
                         Xem đơn hàng

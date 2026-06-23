@@ -19,7 +19,7 @@
     
     input[type="date"]::-webkit-datetime-edit-fields-wrapper { display: none; }
     input[type="date"]:not([value=""])::-webkit-datetime-edit-fields-wrapper { display: flex; }
-
+    
     .hint { margin: 6px 0 18px; color: #777; font-size: 13px; }
     .hint b { color: #C0392B; }
 

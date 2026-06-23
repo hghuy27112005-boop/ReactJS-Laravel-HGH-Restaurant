@@ -80,12 +80,9 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     // Users Management
     Route::apiResource('admin/users', \App\Http\Controllers\Admin\UserController::class);
 
-    // Staff Management
-    Route::apiResource('admin/staff', \App\Http\Controllers\Admin\StaffController::class);
-
     // Promotions
-    Route::apiResource('admin/sale-off-events', \App\Http\Controllers\Admin\SaleOffEventController::class);
-    Route::apiResource('admin/discounts', \App\Http\Controllers\Admin\DiscountController::class);
+    Route::apiResource('admin/sale-off-events', \App\Http\Controllers\Admin\Admin_SaleOffEventController::class);
+    Route::apiResource('admin/discounts', \App\Http\Controllers\Admin\Admin_DiscountController::class);
 
     // Statistics
     Route::get('admin/statistics/revenue', [\App\Http\Controllers\Admin\StatisticsController::class, 'revenue']);

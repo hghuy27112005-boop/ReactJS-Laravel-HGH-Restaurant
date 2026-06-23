@@ -44,6 +44,18 @@ class User extends Authenticatable
     // RELATIONSHIPS
     // ============================================
 
+    public function bills()
+    {
+        return $this->hasManyThrough(
+            Bill::class,
+            Order::class,
+            'user_id',  // FK trên orders
+            'order_id', // FK trên bills
+            'user_id',  // PK trên users
+            'order_id'  // PK trên orders
+        );
+    }
+
     public function orders()
     {
         return $this->hasMany(Order::class, 'user_id', 'user_id');

@@ -59,4 +59,17 @@ class Points extends Model
 
         return (int) floor($amount / 10000);
     }
+
+    public static function maxUsablePoints(int $userPoints, float $subtotal): int
+    {
+        // Tối đa dùng điểm để giảm không quá 50% giá trị đơn
+        $maxDiscount = $subtotal * 0.5;
+        $maxFromDiscount = (int) floor($maxDiscount / 1000); // 1 điểm = 1000đ
+        return min($userPoints, $maxFromDiscount);
+    }
+
+    public static function convertPointsToDiscount(int $points): float
+    {
+        return $points * 1000; // 1 điểm = 1000đ
+    }
 }

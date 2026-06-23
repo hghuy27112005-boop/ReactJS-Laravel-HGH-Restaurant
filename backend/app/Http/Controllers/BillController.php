@@ -21,34 +21,35 @@ class BillController extends Controller
      */
     public function index(Request $request)
     {
-        $query = $request->user()->bills();
+        $query = $request->user()->bills()
+            ->with('order', 'delivery', 'bookingTable');
 
-        // Filter by order type
         if ($request->has('order_type')) {
-            $query->where('order_type', $request->order_type);
+            $query->whereHas('order', function ($q) use ($request) {
+                $q->where('order_type', $request->order_type);
+            });
         }
 
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
-        }
-
-        $bills = $query->with('orders.dish', 'delivery', 'bookingTable')
-            ->paginate($request->get('per_page', 20));
+        $bills = $query->paginate($request->get('per_page', 20));
 
         return response()->json([
             'data' => $bills->items(),
             'pagination' => [
-                'total' => $bills->total(),
-                'per_page' => $bills->perPage(),
+                'total'        => $bills->total(),
+                'per_page'     => $bills->perPage(),
                 'current_page' => $bills->currentPage(),
-                'last_page' => $bills->lastPage(),
+                'last_page'    => $bills->lastPage(),
             ],
         ]);
     }
 
     /**
      * Create new bill
+     *
+     * Hỗ trợ dùng điểm thưởng để giảm giá: client gửi thêm `points_to_use`
+     * (tuỳ chọn, mặc định 0). Số điểm thực tế được dùng sẽ bị giới hạn lại
+     * theo Points::maxUsablePoints() — KHÔNG tin số điểm client tự tính,
+     * luôn validate lại với số điểm thật của user trong DB và giá trị đơn.
      */
     public function store(Request $request)
     {
@@ -59,6 +60,7 @@ class BillController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             // price_at_order KHÔNG còn được validate/dùng để tính tiền — giá thật
             // luôn được lấy từ bảng dishes ở server, không tin giá trị client gửi.
+            'points_to_use' => 'nullable|integer|min:0',
             'delivery.address' => 'required_if:order_type,delivery|string',
             'delivery.phone' => 'required_if:order_type,delivery|string',
             'booking_table' => 'required_if:order_type,booking_table|array',
@@ -75,7 +77,7 @@ class BillController extends Controller
             $dishIds = collect($validated['items'])->pluck('dish_id')->unique();
             $dishes  = Dish::whereIn('dish_id', $dishIds)->get()->keyBy('dish_id');
 
-            $totalAmount = 0;
+            $subtotalBeforePoints = 0;
             $itemsWithRealPrice = [];
 
             foreach ($validated['items'] as $item) {
@@ -89,7 +91,7 @@ class BillController extends Controller
                 }
 
                 $realPrice = (float) $dish->price;
-                $totalAmount += $realPrice * $item['quantity'];
+                $subtotalBeforePoints += $realPrice * $item['quantity'];
 
                 $itemsWithRealPrice[] = [
                     'dish_id'  => $item['dish_id'],
@@ -97,6 +99,20 @@ class BillController extends Controller
                     'price'    => $realPrice,
                 ];
             }
+
+            // ---- Áp dụng giảm giá bằng điểm thưởng (nếu có yêu cầu) ----
+            // Luôn lấy số điểm THẬT của user từ DB, không tin field nào client gửi
+            // ngoài points_to_use (số điểm MUỐN dùng) — số điểm dùng thực tế vẫn
+            // bị chặn lại theo số điểm user thực sự sở hữu.
+            $user = $request->user();
+            $pointsRequested = $validated['points_to_use'] ?? 0;
+
+            $userTotalPoints = $user->getOrCreateStatistics()->total_points ?? 0;
+            $maxUsable = Points::maxUsablePoints((int) $userTotalPoints, $subtotalBeforePoints);
+            $pointsUsed = min($pointsRequested, $maxUsable);
+
+            $pointsDiscountAmount = Points::convertPointsToDiscount($pointsUsed);
+            $totalAmount = round($subtotalBeforePoints - $pointsDiscountAmount, 2);
 
             // Generate IDs
             $orderId = $this->generateOrderCode();
@@ -107,7 +123,7 @@ class BillController extends Controller
                 'order_id' => $orderId,
                 'user_id' => $request->user()->user_id,
                 'order_type' => $validated['order_type'],
-                'subtotal_price' => $totalAmount,
+                'subtotal_price' => $subtotalBeforePoints,
                 'created_at' => now(),
             ]);
 
@@ -162,18 +178,45 @@ class BillController extends Controller
             // Create Bill — booking_table orders are paid immediately at checkout
             $isBooking = $validated['order_type'] === 'booking_table';
             $bill = Bill::create([
-                'bill_id'        => $billId,
-                'order_id'       => $orderId,
-                'total_price'    => $totalAmount,
-                'payment_method' => $isBooking ? 'cash' : 'unpaid',
-                'created_at'     => now(),
+                'bill_id'                          => $billId,
+                'order_id'                         => $orderId,
+                'total_price'                      => $totalAmount,
+                'subtotal_before_points_discount'  => $subtotalBeforePoints,
+                'points_used'                      => $pointsUsed,
+                'points_discount_amount'           => $pointsDiscountAmount,
+                'payment_method'                   => $isBooking ? 'cash' : 'unpaid',
+                'created_at'                        => now(),
             ]);
+
+            // ---- Trừ điểm đã dùng + ghi nhận lịch sử (nếu có dùng điểm) ----
+            // Việc TÍCH điểm thưởng mới (points_earned) cho chính đơn hàng này
+            // chỉ thực hiện SAU KHI thanh toán thành công (processPayment() hoặc
+            // VnpayController::vnpayIpn()), không tích ở đây — vì lúc store()
+            // bill có thể vẫn ở trạng thái "unpaid" (delivery), tích điểm sớm
+            // sẽ sai nếu khách không thanh toán.
+            if ($pointsUsed > 0) {
+                $stats = $user->getOrCreateStatistics();
+                $stats->decrement('total_points', $pointsUsed);
+
+                Points::create([
+                    'user_id'              => $user->user_id,
+                    'bill_id'              => $bill->bill_id,
+                    'points_earned'        => 0,
+                    'points_redeemed'      => $pointsUsed,
+                    'booking_total_price'  => 0,
+                    'delivery_total_price' => 0,
+                ]);
+            }
 
             DB::commit();
 
             return response()->json([
                 'data' => [
-                    'bill_id' => $bill->bill_id
+                    'bill_id'                => $bill->bill_id,
+                    'subtotal'               => $subtotalBeforePoints,
+                    'points_used'            => $pointsUsed,
+                    'points_discount_amount' => $pointsDiscountAmount,
+                    'total_price'            => $totalAmount,
                 ],
                 'message' => 'Bill created successfully',
             ], 201);
@@ -188,7 +231,9 @@ class BillController extends Controller
      */
     public function show(Bill $bill)
     {
-        $this->authorize('view', $bill);
+        if ($bill->order->user_id !== auth()->user()->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         return response()->json([
             'data' => $bill->load('orders.dish', 'delivery', 'bookingTable'),
@@ -200,7 +245,9 @@ class BillController extends Controller
      */
     public function update(Request $request, Bill $bill)
     {
-        $this->authorize('update', $bill);
+        if ($bill->order->user_id !== $request->user()->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         $validated = $request->validate([
             'status' => 'in:pending,unpaid,completed,cancelled',
@@ -219,7 +266,9 @@ class BillController extends Controller
      */
     public function destroy(Bill $bill)
     {
-        $this->authorize('delete', $bill);
+        if ($bill->order->user_id !== auth()->user()->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         $bill->delete();
 
@@ -232,14 +281,15 @@ class BillController extends Controller
      * Calculate total with discount
      *
      * LƯU Ý: hàm này hiện không được Frontend gọi tới (đã xác nhận không
-     * xuất hiện ở bất kỳ đâu trong FE). Đã sửa lại để dùng đúng quan hệ/field
-     * thực tế của model — bản cũ dùng $bill->orders (không tồn tại, Bill chỉ
-     * có order() số ít) và $order->price_at_order/$order->quantity (field này
-     * thuộc OrderItem, không thuộc Order), nên gọi tới chắc chắn sẽ lỗi runtime.
+     * xuất hiện ở bất kỳ đâu trong FE). Giữ nguyên như cũ, dùng cơ chế
+     * Discount riêng (theo user_id, discount_percentage) — KHÔNG liên quan
+     * tới cơ chế điểm thưởng mới (Points::convertPointsToDiscount).
      */
     public function calculateTotal(Request $request, Bill $bill)
     {
-        $this->authorize('view', $bill);
+        if ($bill->order->user_id !== $request->user()->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         $user = $request->user();
 
@@ -285,12 +335,19 @@ class BillController extends Controller
      *
      * QUAN TRỌNG: KHÔNG nhận `amount` từ client nữa. Số tiền thanh toán luôn
      * lấy từ $bill->total_price đã được tính đúng ở server lúc tạo bill
-     * (store()). Trước đây client có thể gửi amount tuỳ ý, ghi đè total_price
-     * gốc và làm sai cả điểm thưởng/thống kê.
+     * (store()) — số tiền này đã trừ sẵn phần giảm giá từ điểm thưởng (nếu có).
+     *
+     * Điểm thưởng MỚI được tích (points_earned) ở đây dựa trên total_price
+     * thực tế đã thanh toán — nghĩa là nếu khách dùng điểm để giảm giá, điểm
+     * tích mới sẽ tính trên số tiền ĐÃ GIẢM, không tính trên giá gốc. Đây là
+     * hành vi có chủ đích: tránh vòng lặp "dùng điểm cũ để sinh điểm mới nhiều
+     * hơn số điểm đã trừ".
      */
     public function processPayment(Request $request, Bill $bill)
     {
-        $this->authorize('update', $bill);
+        if ($bill->order->user_id !== $request->user()->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         $validated = $request->validate([
             'payment_method' => 'required|in:credit_card,cash,bank_transfer',
@@ -310,7 +367,7 @@ class BillController extends Controller
             $order = $bill->order; // hoặc $bill->orders nếu quan hệ là hasMany
 
             // Cập nhật trạng thái thanh toán đúng bảng tương ứng
-            if ($order->order_type === 'delivery' && $bill->delivery) {
+            if ($order->order_type === 'delivery' && $bill->delivery !== null) {
                 $bill->delivery->update([
                     'D_payment_status' => 'paid',
                     'delivery_status'  => 'waiting_approval', // theo đúng enum đã khai báo
@@ -318,22 +375,26 @@ class BillController extends Controller
                 ]);
             }
 
-            if ($order->order_type === 'booking_table' && $bill->bookingTable) {
-                // Nếu quan hệ trả về collection (nhiều bàn) thì loop update từng bản ghi
-                foreach ($bill->bookingTable as $bt) {
-                    $bt->update([
-                        'B_payment_status' => 'paid',
-                        'booking_status'   => 'waiting_confirmation',
-                    ]);
+            if ($order->order_type === 'booking_table') {
+                $bookingTables = $bill->bookingTable; // Collection
+                if ($bookingTables->isNotEmpty()) {
+                    foreach ($bookingTables as $bt) {
+                        $bt->update([
+                            'B_payment_status' => 'paid',
+                            'booking_status'   => 'waiting_confirmation',
+                        ]);
+                    }
                 }
             }
 
-            // Tính điểm thưởng — dựa trên $amount lấy từ DB, không phải từ client
+            // Tính điểm thưởng MỚI được tích — dựa trên $amount (đã trừ giảm giá
+            // từ điểm cũ nếu có), lấy từ DB, không phải từ client.
             $pointsEarned = Points::calculatePoints($amount);
             Points::create([
                 'user_id'              => $request->user()->user_id, // đồng nhất với store()
                 'bill_id'              => $bill->bill_id,             // sửa: đúng PK
                 'points_earned'        => $pointsEarned,
+                'points_redeemed'      => 0, // điểm dùng để giảm giá (nếu có) đã ghi nhận riêng ở store()
                 'booking_total_price'  => $order->order_type === 'booking_table' ? $amount : 0,
                 'delivery_total_price' => $order->order_type === 'delivery' ? $amount : 0,
             ]);

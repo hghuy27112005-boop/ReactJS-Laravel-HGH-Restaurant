@@ -13,6 +13,10 @@ return new class extends Migration
             $table->string('order_id', 20)->unique();
             $table->foreign('order_id')->references('order_id')->on('orders')->onDelete('cascade');
             $table->decimal('total_price', 12, 2);
+            $table->decimal('subtotal_before_points_discount', 12, 2)->nullable(); // thêm
+            $table->integer('points_used')->default(0);                            // thêm
+            $table->decimal('points_discount_amount', 12, 2)->default(0);         // thêm
+            $table->string('vnp_txn_ref', 50)->nullable();   
             $table->string('payment_method', 50)->nullable();
             $table->timestamp('created_at')->useCurrent();
         });

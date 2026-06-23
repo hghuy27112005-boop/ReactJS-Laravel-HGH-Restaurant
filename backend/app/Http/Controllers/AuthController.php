@@ -29,7 +29,6 @@ class AuthController extends Controller
 
         if (Auth::attempt([$loginType => $login, 'password' => $request->password])) {
             $user = Auth::user();
-            $request->session()->regenerate();
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
@@ -107,7 +106,6 @@ class AuthController extends Controller
             ]);
 
             Auth::login($user);
-            $request->session()->regenerate();
             $token = $user->createToken('auth_token')->plainTextToken;
 
             return response()->json([
