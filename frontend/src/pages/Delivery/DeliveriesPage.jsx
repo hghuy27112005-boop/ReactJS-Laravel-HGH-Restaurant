@@ -33,11 +33,6 @@ const DeliveriesPage = () => {
         setCheckoutStage('payment');
     };
 
-    /**
-     * Cho phép giảm số lượng về 0 — khi về 0 thì tự xóa món đó khỏi giỏ,
-     * thay vì chặn cứng ở mức 1 như trước. Người dùng chỉ muốn bỏ 1 món
-     * lẻ thì bấm trừ liên tục là được, không cần dùng "Xóa tất cả món".
-     */
     const handleCartQuantityChange = (idx, amount) => {
         setDeliveryCart(prev => {
             const updated = prev
@@ -149,6 +144,7 @@ const DeliveriesPage = () => {
                         <div className="text-center py-8 text-gray-500">
                             <i className="fas fa-shopping-basket text-4xl mb-3 text-gray-300 block"></i>
                             <p className="text-lg">Quầy đang trống, vui lòng quay lại Menu thêm món vào giỏ hàng.</p>
+                            <button onClick={() => window.location.href = '/menu'} className="mt-4 bg-red-600 text-white px-4 py-2 rounded">Đến Menu</button>
                         </div>
                     ) : (
                         <div className="grid md:grid-cols-2 gap-8">

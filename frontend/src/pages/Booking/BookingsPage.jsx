@@ -124,12 +124,15 @@ const BookingsPage = () => {
 
     const handleCartQuantityChange = (idx, amount) => {
         setBookingCart(prev => {
-            const updated = prev.map((item, i) => {
-                if (i !== idx) return item;
-                const newQty = item.quantity + amount;
-                if (newQty < 1) return item; // không cho xuống dưới 1
-                return { ...item, quantity: newQty };
-            });
+            const updated = prev
+                .map((item, i) => {
+                    if (i !== idx) return item;
+                    const newQty = item.quantity + amount;
+                    if (newQty < 0) return item; // không cho âm
+                    return { ...item, quantity: newQty };
+                })
+                .filter(item => item.quantity > 0); // tự xóa món khi về 0
+
             localStorage.setItem('booking_cart', JSON.stringify(updated));
             return updated;
         });

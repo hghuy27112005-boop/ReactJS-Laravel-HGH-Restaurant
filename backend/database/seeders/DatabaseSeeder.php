@@ -35,19 +35,38 @@ class DatabaseSeeder extends Seeder
         }
 
         // 2. Clear old data safely (reverse order of foreign keys)
+        // Dùng TRUNCATE ... RESTART IDENTITY CASCADE thay cho delete() để:
+        //   - Xóa hết dữ liệu cũ
+        //   - Reset lại sequence/auto-increment về 1 (delete() không làm việc này,
+        //     khiến id bị nhảy số như 5, 6, 7,... khi seed lại nhiều lần)
         DB::statement('SET session_replication_role = replica;'); // Disable FK checks in PostgreSQL temporarily
-        DB::table('stocks')->delete();
-        DB::table('order_items')->delete();
-        DB::table('deliveries')->delete();
-        DB::table('booking_tables')->delete();
-        DB::table('bills')->delete();
-        DB::table('orders')->delete();
-        DB::table('sale_off_events')->delete();
-        DB::table('dishes')->delete();
-        DB::table('dish_types')->delete();
-        DB::table('table_types')->delete();
-        DB::table('users')->delete();
-        DB::statement('SET session_replication_role = DEFAULT;'); // Re-enable FK checks
+
+        $tablesToTruncate = [
+            'stocks',
+            'order_items',
+            'deliveries',
+            'booking_tables',
+            'bills',
+            'orders',
+            'sale_off_events',
+            'dishes',
+            'dish_types',
+            'restaurant_tables',
+            'table_types',
+            'users',
+        ];
+
+        foreach ($tablesToTruncate as $table) {
+            DB::statement("TRUNCATE TABLE {$table} RESTART IDENTITY CASCADE;");
+        }
+
+        DB::statement('SET session_replication_role = DEFAULT;'); 
+
+        $avatarsPath = public_path('avatars');
+        if (File::exists($avatarsPath)) {
+            File::deleteDirectory($avatarsPath);
+        }
+        File::makeDirectory($avatarsPath, 0755, true);
 
         // 3. Seed Users
         DB::table('users')->insert([
@@ -71,12 +90,46 @@ class DatabaseSeeder extends Seeder
             ]
         ]);
 
-        // 4. Seed Table Types
+        // 4. Seed Table
         DB::table('table_types')->insert([
             ['table_type_name' => 'Bàn 5 người', 'capacity' => 2],
             ['table_type_name' => 'Bàn 10 người', 'capacity' => 4],
             ['table_type_name' => 'Bàn 15 người', 'capacity' => 8],
         ]);
+
+        $tableTypeIds = DB::table('table_types')
+            ->orderBy('table_type_id')
+            ->pluck('table_type_id')
+            ->values();
+
+        $restaurantTables = [];
+
+        foreach (range(1, 25) as $tableNumber) {
+            $restaurantTables[] = [
+                'table_number'  => $tableNumber,
+                'table_type_id' => $tableTypeIds[0], // Bàn 5 người
+                'created_at'    => now(),
+                'updated_at'    => now(),
+            ];
+        }
+        foreach (range(26, 45) as $tableNumber) {
+            $restaurantTables[] = [
+                'table_number'  => $tableNumber,
+                'table_type_id' => $tableTypeIds[1], // Bàn 10 người
+                'created_at'    => now(),
+                'updated_at'    => now(),
+            ];
+        }
+        foreach (range(46, 50) as $tableNumber) {
+            $restaurantTables[] = [
+                'table_number'  => $tableNumber,
+                'table_type_id' => $tableTypeIds[2], // Bàn 15 người
+                'created_at'    => now(),
+                'updated_at'    => now(),
+            ];
+        }
+
+        DB::table('restaurant_tables')->insert($restaurantTables);
 
         // 5. Seed Dish Types
         DB::table('dish_types')->insert([

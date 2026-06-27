@@ -13,12 +13,15 @@ return new class extends Migration {
         Schema::create('users', function (Blueprint $table) {
             $table->id('user_id');
             $table->string('username', 50);
-            $table->string('password_hash', 255);
+            $table->string('password_hash', 255)->nullable();
             $table->string('email', 255)->unique();
             $table->string('tele_number', 20)->unique()->nullable();
             $table->text('avatar_url')->nullable();
             $table->enum('role', ['admin', 'staff', 'user'])->default('user');
             $table->enum('membership', ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'administrator'])->default('bronze');
+            $table->string('provider', 20)->nullable();
+            $table->string('provider_id', 100)->nullable();
+            $table->unique(['provider', 'provider_id']);
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent();
         });

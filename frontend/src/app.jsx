@@ -33,8 +33,25 @@ import AdminDeliveriesPage from './pages/Admin/AdminDeliveriesPage';
 import SalesReportPage from './pages/Admin/SalesReportPage';
 import AnalyticsDashboardPage from './pages/Admin/AnalyticsDashboardPage';
 import AdminSettingsPage from './pages/Admin/AdminSettingsPage';
-import FavoriteDishesPage from './pages/User/FavoriteDishesPage';
-import UserNotificationsPage from './pages/User/UserNotificationsPage';
+
+(function handleGoogleAuthRedirect() {
+  const params = new URLSearchParams(window.location.search);
+  const googleToken = params.get('google_token');
+  const googleUserPayload = params.get('google_user');
+
+  if (googleToken && googleUserPayload) {
+    try {
+      const userData = JSON.parse(atob(googleUserPayload));
+      localStorage.setItem('auth_token', googleToken);
+      localStorage.setItem('user', JSON.stringify(userData));
+    } catch (e) {
+      console.error('Lỗi xử lý đăng nhập Google:', e);
+    } finally {
+      // Xoá query string khỏi URL, tránh bị lưu lại lần nữa khi F5/share link
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }
+})();
 
 // Main App Component with Router
 function App() {
@@ -60,8 +77,6 @@ function App() {
               <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
               <Route path="/statistics" element={<ProtectedRoute><StatisticsPage /></ProtectedRoute>} />
               <Route path="/points" element={<ProtectedRoute><PointsPage /></ProtectedRoute>} />
-              <Route path="/favorites" element={<ProtectedRoute><FavoriteDishesPage /></ProtectedRoute>} />
-              <Route path="/notifications" element={<ProtectedRoute><UserNotificationsPage /></ProtectedRoute>} />
 
               {/* Bookings */}
               <Route path="/bookings" element={<ProtectedRoute><BookingsPage /></ProtectedRoute>} />

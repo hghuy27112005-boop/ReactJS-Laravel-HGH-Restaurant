@@ -52,7 +52,7 @@ export const useAuth = () => {
 
             return { success: true, user };
         } catch (err) {
-            const message = err.response?.data?.message || 'Tài khoản không tồn tại.';
+            const message = err.response?.data?.message || 'Không thể kết nối tới server. Vui lòng thử lại.';
             setError(message);
             return { success: false };
         } finally {
@@ -73,7 +73,7 @@ export const useAuth = () => {
 
             return { success: true, user };
         } catch (err) {
-            const message = err.response?.data?.message || 'Đăng ký thất bại. Vui lòng thử lại.';
+            const message = err.response?.data?.message || 'Không thể kết nối tới server. Vui lòng thử lại.';
             setError(message);
             return { success: false };
         } finally {

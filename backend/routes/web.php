@@ -2,13 +2,13 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\VnpayController;
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\GoogleAuthController;
 
 Route::get('/vnpay/return', [VnpayController::class, 'vnpayReturn']);
 Route::match(['get', 'post'], '/vnpay/ipn', [VnpayController::class, 'vnpayIpn']);
 
-Route::get('/auth/google', [AuthController::class, 'redirectToGoogle']);
-Route::get('/auth/google/callback', [AuthController::class, 'handleGoogleCallback']);
+Route::get('/auth/google/redirect', [GoogleAuthController::class, 'redirect']);
+Route::get('/auth/google/callback', [GoogleAuthController::class, 'callback']);
 
 Route::get('/clear', function () {
     session()->flush();
@@ -17,4 +17,4 @@ Route::get('/clear', function () {
 
 Route::get('/{any?}', function () {
     return view('layout');
-})->where('any', '^(?!api|vnpay|auth|clear).*$');
+})->where('any', '^(?!api|vnpay|auth|clear).*$')->name('login');

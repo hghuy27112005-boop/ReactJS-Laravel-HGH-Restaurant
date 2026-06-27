@@ -23,7 +23,9 @@ class User extends Authenticatable
         'tele_number',
         'avatar_url',
         'role',
-        'membership'
+        'membership',
+         'provider',
+        'provider_id',
     ];
 
     protected $hidden = [

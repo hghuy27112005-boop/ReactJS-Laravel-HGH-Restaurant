@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthContext } from '../../context/AuthContext';
 import { ErrorMessage, SuccessMessage } from '../../components/Shared';
 
@@ -7,6 +7,7 @@ const LoginPage = () => {
     const [activeTab, setActiveTab] = useState('login');
     const [localError, setLocalError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
+    
 
     // Login Form State
     const [loginData, setLoginData] = useState({ username: '', password: '' });
@@ -20,12 +21,29 @@ const LoginPage = () => {
         password_confirmation: ''
     });
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('error') === 'google_auth_failed') {
+            setLocalError('Đăng nhập bằng Google thất bại. Vui lòng thử lại.');
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, []);
+
     const handleLoginChange = (e) => {
         setLoginData({ ...loginData, [e.target.name]: e.target.value });
     };
 
     const handleRegChange = (e) => {
-        setRegData({ ...regData, [e.target.name]: e.target.value });
+        const { name, value } = e.target;
+
+        if (name === 'phone') {
+            // Chỉ giữ chữ số, tối đa 10 ký tự
+            const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+            setRegData({ ...regData, phone: digitsOnly });
+            return;
+        }
+
+        setRegData({ ...regData, [name]: value });
     };
 
     const switchTab = (tab) => {
@@ -317,7 +335,7 @@ const LoginPage = () => {
                         <button 
                             type="button" 
                             className="social-btn google" 
-                            onClick={() => alert('Chức năng đăng nhập Google đang được phát triển.')}
+                            onClick={() => { window.location.href = '/auth/google/redirect'; }}
                         >
                             <i className="fab fa-google"></i> Đăng nhập bằng Google
                         </button>
@@ -349,12 +367,14 @@ const LoginPage = () => {
                             placeholder="ví dụ: a@gmail.com (tối đa 50 ký tự)" 
                         />
 
-                        <label>Số điện thoại:</label>
+                        <label>Số điện thoại (*):</label>
                         <input 
                             type="text" 
                             name="phone"
                             value={regData.phone}
                             onChange={handleRegChange}
+                            required
+                            inputMode="numeric"
                             maxLength="10" 
                             placeholder="Nhập số điện thoại (10 số)" 
                         />

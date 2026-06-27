@@ -58,6 +58,10 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Discounts
     Route::get('discounts', [\App\Http\Controllers\DiscountController::class, 'userDiscounts']);
     Route::get('discounts/membership/{membership}', [\App\Http\Controllers\DiscountController::class, 'byMembership']);
+
+    //Password
+    Route::post('/user/change-password', [\App\Http\Controllers\UserController::class, 'changePassword']);
+    
 });
 
 // Admin Routes

@@ -59,9 +59,6 @@ const Navbar = () => {
                                     <i className="fas fa-user"></i>
                                 )}
                             </Link>
-                            <button onClick={async () => { await logout(); window.location.href = '/login'; }} className="action-btn" style={{ marginLeft: '10px' }}>
-                                <i className="fas fa-sign-out-alt"></i> Đăng xuất
-                            </button>
                         </>
                     )
                 ) : (
