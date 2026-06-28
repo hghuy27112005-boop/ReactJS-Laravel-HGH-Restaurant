@@ -9,7 +9,8 @@ class DishController extends Controller
 {
     public function index(Request $request)
     {
-        $dishes = Dish::all();
+        // Chỉ lấy món đang bán (is_active = true) cho trang menu công khai / đặt hàng
+        $dishes = Dish::where('is_active', true)->get();
 
         if ($request->expectsJson()) {
             $dishes->each(function ($dish) {
@@ -20,6 +21,15 @@ class DishController extends Controller
         }
 
         return view('menu', ['danhSachMon' => $dishes]);
+    }
+
+    /**
+     * Danh sách TẤT CẢ món ăn (kể cả đã ẩn) - chỉ dùng cho trang quản lý của admin
+     */
+    public function adminIndex()
+    {
+        $dishes = Dish::orderBy('dish_id', 'asc')->get();
+        return response()->json($dishes);
     }
 
     public function show(Request $request, $id)
@@ -63,7 +73,7 @@ class DishController extends Controller
             if ($request->hasFile('image')) {
                 $file = $request->file('image');
                 $extension = $file->getClientOriginalExtension();
-                
+
                 // Logic đặt tên theo số thứ tự (X.jpg)
                 $directory = public_path('dishes');
                 if (!file_exists($directory)) {
@@ -78,10 +88,10 @@ class DishController extends Controller
                         $maxNum = max($maxNum, (int)$nameOnly);
                     }
                 }
-                
+
                 $nextNum = $maxNum + 1;
                 $newFilename = $nextNum . '.' . $extension;
-                
+
                 $file->move($directory, $newFilename);
 
                 Dish::create([
@@ -90,6 +100,7 @@ class DishController extends Controller
                     'image_url' => $newFilename,
                     'type_id' => $request->type_id,
                     'is_bestseller' => false,
+                    'is_active' => true,
                 ]);
 
                 return response()->json([
@@ -112,6 +123,7 @@ class DishController extends Controller
         $request->validate([
             'dish_name' => 'required|string|max:255',
             'type_id' => 'required|exists:dish_types,type_id',
+            'price' => 'required|numeric|min:0',
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
         ]);
 
@@ -119,13 +131,16 @@ class DishController extends Controller
             $data = [
                 'dish_name' => $request->dish_name,
                 'type_id' => $request->type_id,
+                'price' => $request->price,
                 'is_bestseller' => $request->has('is_bestseller'),
             ];
 
             if ($request->hasFile('image')) {
                 // Xóa hình cũ nếu tồn tại trong folder dishes
-                if ($dish->image_url) {
-                    $oldPath = public_path('dishes/' . $dish->image_url);
+                // Lưu ý: $dish->image_url đã qua accessor (trả về URL đầy đủ), phải lấy giá trị gốc trong DB bằng getRawOriginal()
+                $oldImageName = $dish->getRawOriginal('image_url');
+                if ($oldImageName) {
+                    $oldPath = public_path('dishes/' . $oldImageName);
                     if (file_exists($oldPath)) {
                         unlink($oldPath);
                     }
@@ -134,9 +149,8 @@ class DishController extends Controller
                 $file = $request->file('image');
                 $extension = $file->getClientOriginalExtension();
 
-                // Dùng ID làm tên file để giữ STT hoặc dùng logic đếm lại đều được
-                // Ở đây mình sẽ dùng ID để đảm bảo tính duy nhất
-                $newFilename = $dish->dish_id . '.' . $extension;
+                // Thêm timestamp vào tên file để tránh lỗi cache trình duyệt khi thay ảnh mới
+                $newFilename = $dish->dish_id . '_' . time() . '.' . $extension;
                 $file->move(public_path('dishes'), $newFilename);
                 $data['image_url'] = $newFilename;
             }
@@ -155,25 +169,84 @@ class DishController extends Controller
         }
     }
 
+    /**
+     * Ẩn / hiện món ăn khỏi danh sách bán (không xóa dữ liệu, chỉ đổi cờ is_active)
+     */
+    public function toggleStatus($id)
+    {
+        $dish = Dish::find($id);
+
+        if (!$dish) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không tìm thấy món ăn này.'
+            ], 404);
+        }
+
+        $dish->is_active = !$dish->is_active;
+        $dish->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => $dish->is_active
+                ? 'Đã đưa món ăn trở lại danh sách bán!'
+                : 'Đã ẩn món ăn khỏi danh sách bán!',
+            'is_active' => $dish->is_active,
+        ]);
+    }
+
+    /**
+     * Xóa vĩnh viễn món ăn khỏi database.
+     * Nếu món đang bị bảng khác tham chiếu (orders, order_items, stocks, ...) thì DB sẽ
+     * chặn bằng lỗi vi phạm khóa ngoại -> bắt lỗi đó và trả thông báo dễ hiểu,
+     * gợi ý dùng toggleStatus() để ẩn món thay vì xóa.
+     */
     public function deleteDish($id)
     {
-        try {
-            $dish = Dish::findOrFail($id);
+        $dish = Dish::find($id);
 
-            // Xóa file hình trong folder dishes
-            if ($dish->image_url) {
-                $filePath = public_path('dishes/' . $dish->image_url);
+        if (!$dish) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không tìm thấy món ăn này (có thể đã bị xóa trước đó).'
+            ], 404);
+        }
+
+        try {
+            // Lưu lại tên ảnh gốc trước khi xóa (vì sau khi $dish->delete() thành công,
+            // object $dish vẫn còn trong PHP nên vẫn đọc được, nhưng để rõ ràng ta lấy trước)
+            $imageName = $dish->getRawOriginal('image_url');
+
+            // Xóa record trong DB TRƯỚC. Nếu bị chặn bởi khóa ngoại (vd: bảng stocks, order_items...)
+            // thì sẽ ném exception ngay tại đây -> file ảnh chưa bị động tới, vẫn an toàn.
+            $dish->delete();
+
+            // Chỉ xóa file ảnh SAU KHI đã chắc chắn xóa DB thành công
+            if ($imageName) {
+                $filePath = public_path('dishes/' . $imageName);
                 if (file_exists($filePath)) {
                     unlink($filePath);
                 }
             }
 
-            $dish->delete();
-
             return response()->json([
                 'success' => true,
                 'message' => 'Đã xóa món ăn thành công!'
             ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            // 23503 = mã lỗi vi phạm khóa ngoại của PostgreSQL, 23000 = mã chung của MySQL
+            // (món đang bị tham chiếu bởi bảng khác, vd: stocks, order_items...)
+            if (in_array($e->getCode(), ['23503', '23000'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không thể xóa món ăn này vì đang được tham chiếu ở bảng khác trong hệ thống (vd: tồn kho, đơn hàng...). Hãy dùng nút "Ẩn" để ngừng bán món này thay vì xóa hẳn.'
+                ], 409);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Lỗi cơ sở dữ liệu: ' . $e->getMessage()
+            ], 500);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,

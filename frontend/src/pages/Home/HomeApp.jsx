@@ -28,7 +28,7 @@ export default function HomeApp() {
 
             <h2 className="home-title">
                 <i className="fas fa-star" style={{ color: '#FFD700', marginRight: '8px' }}></i>
-                Món nổi bật
+                Bestsellers
             </h2>
 
             <div className="dishes-grid">

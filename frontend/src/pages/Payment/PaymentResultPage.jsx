@@ -16,10 +16,10 @@ const PaymentResultPage = () => {
     useEffect(() => {
         // Laravel đã verify chữ ký + redirect về đây với params sạch.
         // KHÔNG gọi lại /vnpay/return nữa — đó là nguyên nhân gây lỗi chữ ký.
-        const status  = searchParams.get('status');   // 'success' | 'failed'
-        const code    = searchParams.get('code');     // vnp_ResponseCode gốc
-        const billId  = searchParams.get('bill_id');
-        const type    = searchParams.get('order_type');
+        const status = searchParams.get('status');   // 'success' | 'failed'
+        const code = searchParams.get('code');     // vnp_ResponseCode gốc
+        const billId = searchParams.get('bill_id');
+        const type = searchParams.get('order_type');
 
         setOrderType(type || 'delivery');
 
@@ -31,9 +31,13 @@ const PaymentResultPage = () => {
             confirmed: false, // chưa xác nhận với DB
         });
 
-        // Dọn cart ngay, không phụ thuộc vào việc verify DB thành công hay không
-        localStorage.removeItem('delivery_cart');
-        localStorage.removeItem('booking_cart');
+        // Dọn đúng giỏ hàng tương ứng với loại đơn vừa thanh toán
+        // (không xóa giỏ bên kia — user có thể vẫn đang chuẩn bị đặt thêm)
+        if (type === 'booking_table') {
+            localStorage.removeItem('booking_cart');
+        } else {
+            localStorage.removeItem('delivery_cart');
+        }
 
         // Nếu VNPAY báo thành công, xác nhận lại với backend xem IPN
         // đã cập nhật trạng thái "paid" thật trong DB chưa — vì IPN chạy

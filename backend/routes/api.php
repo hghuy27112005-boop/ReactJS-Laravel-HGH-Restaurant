@@ -61,7 +61,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     //Password
     Route::post('/user/change-password', [\App\Http\Controllers\UserController::class, 'changePassword']);
-    
+
 });
 
 // Admin Routes
@@ -83,6 +83,14 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
     // Users Management
     Route::apiResource('admin/users', \App\Http\Controllers\Admin\UserController::class);
+
+    // Dishes Management
+    // GET danh sách TẤT CẢ món (kể cả đã ẩn) - dùng cho trang quản lý, khác với /dishes (chỉ món đang bán)
+    Route::get('admin/dishes', [\App\Http\Controllers\DishController::class, 'adminIndex']);
+    Route::post('admin/dishes', [\App\Http\Controllers\DishController::class, 'addDish']);
+    Route::post('admin/dishes/{id}', [\App\Http\Controllers\DishController::class, 'updateDish']);
+    Route::post('admin/dishes/{id}/toggle-status', [\App\Http\Controllers\DishController::class, 'toggleStatus']);
+    Route::delete('admin/dishes/{id}', [\App\Http\Controllers\DishController::class, 'deleteDish']);
 
     // Promotions
     Route::apiResource('admin/sale-off-events', \App\Http\Controllers\Admin\Admin_SaleOffEventController::class);

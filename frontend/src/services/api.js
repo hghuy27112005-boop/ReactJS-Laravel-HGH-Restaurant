@@ -114,7 +114,7 @@ export const bookingTableAPI = {
         }),
 };
 
-// Dishes API
+// Dishes API (public - chỉ trả về món đang bán, is_active = true)
 export const dishAPI = {
     getAll: (filters = {}) =>
         axiosInstance.get('/dishes', { params: filters }),
@@ -161,6 +161,22 @@ export const adminAPI = {
             axiosInstance.get('/admin/deliveries', { params: filters }),
         updateStatus: (id, status) =>
             axiosInstance.put(`/admin/deliveries/${id}/status`, { status }),
+    },
+    dishes: {
+        // Lấy TOÀN BỘ món (kể cả đã ẩn) - chỉ dùng cho trang quản lý admin
+        getAll: () => axiosInstance.get('/admin/dishes'),
+        create: (formData) =>
+            axiosInstance.post('/admin/dishes', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            }),
+        update: (id, formData) =>
+            axiosInstance.post(`/admin/dishes/${id}`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            }),
+        // Ẩn / hiện món khỏi danh sách bán (không xóa dữ liệu)
+        toggleStatus: (id) => axiosInstance.post(`/admin/dishes/${id}/toggle-status`),
+        // Xóa vĩnh viễn - backend sẽ từ chối nếu món đã từng được đặt hàng
+        delete: (id) => axiosInstance.delete(`/admin/dishes/${id}`),
     },
     stock: {
         getAll: () => axiosInstance.get('/admin/stocks'),

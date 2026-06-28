@@ -23,6 +23,8 @@ const Navbar = () => {
                         <>
                             <Link to="/admin/dashboard" className={isActive('/admin/dashboard') ? 'active' : ''}>Dashboard</Link>
                             <Link to="/admin/sales" className={isActive('/admin/sales') ? 'active' : ''}>Doanh thu</Link>
+                            <Link to="/admin/menu" className={isActive('/admin/menu') ? 'active' : ''}>Quản lý thực đơn</Link>
+                            <Link to="/admin/orders" className={isActive('/admin/orders') ? 'active' : ''}>Quản lý đơn hàng</Link>
                         </>
                     ) : (
                         <>

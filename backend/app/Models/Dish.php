@@ -16,6 +16,12 @@ class Dish extends Model
         'image_url',
         'type_id',
         'is_bestseller',
+        'is_active',
+    ];
+
+    protected $casts = [
+        'is_bestseller' => 'boolean',
+        'is_active' => 'boolean',
     ];
 
     public function getImageUrlAttribute($value)
@@ -63,6 +69,14 @@ class Dish extends Model
         return $query->where('type_id', $typeId);
     }
 
+    /**
+     * Chỉ lấy món đang bán (chưa bị ẩn)
+     */
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
+    }
+
     // ============================================
     // HELPER METHODS
     // ============================================
@@ -84,6 +98,14 @@ class Dish extends Model
     }
 
     /**
+     * Check if dish is currently active (not hidden from sale)
+     */
+    public function isActiveDish()
+    {
+        return $this->is_active === true;
+    }
+
+    /**
      * Apply sale off discount
      */
     public function applyDiscount($discountPercent)
@@ -99,7 +121,7 @@ class Dish extends Model
         $stock = Stock::where('dish_id', $this->dish_id)
             ->where('status', 'active')
             ->first();
-        
+
         return $stock ? $stock->quantity_left : 0;
     }
 

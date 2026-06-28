@@ -15,6 +15,7 @@ return new class extends Migration
             $table->text('image_url');
             $table->decimal('price', 10, 2)->default(30000);
             $table->boolean('is_bestseller')->default(false);
+            $table->boolean('is_active')->default(true)->after('is_bestseller');
         });
     }
 

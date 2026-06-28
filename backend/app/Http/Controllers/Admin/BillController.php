@@ -13,7 +13,7 @@ class BillController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Bill::with('user', 'orders.dish', 'delivery', 'bookingTable');
+        $query = Bill::with('order.user', 'order.items.dish', 'delivery', 'bookingTable');
 
         // Filter by date
         if ($request->has('date_from')) {
@@ -30,20 +30,30 @@ class BillController extends Controller
 
         // Filter by order type
         if ($request->has('order_type')) {
-            $query->where('order_type', $request->order_type);
+            $query->whereHas('order', function ($q) use ($request) {
+                $q->where('order_type', $request->order_type);
+            });
         }
 
-        // Search by bill code or user
+        // Filter by user_id
+        if ($request->has('user_id')) {
+            $query->whereHas('order', function ($q) use ($request) {
+                $q->where('user_id', $request->user_id);
+            });
+        }
+
+        // Search by bill id or user
         if ($request->has('search')) {
             $query->where(function ($q) use ($request) {
-                $q->where('bill_code', 'like', '%' . $request->search . '%')
-                    ->orWhereHas('user', function ($subq) use ($request) {
+                $q->where('bill_id', 'like', '%' . $request->search . '%')
+                    ->orWhereHas('order.user', function ($subq) use ($request) {
                         $subq->where('name', 'like', '%' . $request->search . '%');
                     });
             });
         }
 
-        $bills = $query->orderByDesc('created_at')
+        $sortOrder = $request->get('sort', 'desc');
+        $bills = $query->orderBy('created_at', $sortOrder)
             ->paginate($request->get('per_page', 20));
 
         return response()->json([

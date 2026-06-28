@@ -17,7 +17,6 @@ function authHeaders(extra = {}) {
 
 // ── Giới hạn file ảnh upload ────────────────────────────────────────────────
 const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-
 // ── Toast ───────────────────────────────────────────────────────────────────
 function useToast() {
   const [toast, setToast] = useState(null);
@@ -34,7 +33,7 @@ function Toast({ toast }) {
   if (!toast) return null;
   const colors = {
     success: { bg: "#d4edda", border: "#28a745", text: "#155724" },
-    error:   { bg: "#f8d7da", border: "#C0392B", text: "#721c24" },
+    error: { bg: "#f8d7da", border: "#C0392B", text: "#721c24" },
     warning: { bg: "#fff3cd", border: "#ffc107", text: "#856404" },
   };
   const c = colors[toast.type] || colors.success;
@@ -207,8 +206,8 @@ function btnStyle(variant, disabled = false) {
 // ── Nút chung ────────────────────────────────────────────────────────────────
 function Btn({ children, onClick, variant = "outline", disabled, style = {}, type = "button" }) {
   const variants = {
-    outline: { background: "#fff", color: "#555",    border: "1px solid #ddd" },
-    danger:  { background: "#fff", color: "#C0392B", border: "1px solid #C0392B" },
+    outline: { background: "#fff", color: "#555", border: "1px solid #ddd" },
+    danger: { background: "#fff", color: "#C0392B", border: "1px solid #C0392B" },
     primary: { background: "#C0392B", color: "#fff", border: "1px solid #C0392B" },
   };
   const base = variants[variant];
@@ -467,25 +466,33 @@ export default function ProfilePage() {
       </Modal>
 
       {/* ── Main Layout ── */}
-      <div style={{ minHeight: "80vh", display: "flex", alignItems: "flex-start",
-        justifyContent: "center", padding: "50px 20px", background: "#f8f8f8" }}>
-        <div style={{ display: "flex", width: "100%", maxWidth: 900,
+      <div style={{
+        minHeight: "80vh", display: "flex", alignItems: "flex-start",
+        justifyContent: "center", padding: "50px 20px", background: "#f8f8f8"
+      }}>
+        <div style={{
+          display: "flex", width: "100%", maxWidth: 900,
           background: "#fff", padding: 40, borderRadius: 12,
-          boxShadow: "0 5px 20px rgba(0,0,0,0.06)", flexWrap: "wrap" }}>
+          boxShadow: "0 5px 20px rgba(0,0,0,0.06)", flexWrap: "wrap"
+        }}>
 
           {/* ── Sidebar ── */}
-          <div style={{ width: "30%", minWidth: 200, textAlign: "center",
-            borderRight: "1px solid #eee", paddingRight: 20 }}>
+          <div style={{
+            width: "30%", minWidth: 200, textAlign: "center",
+            borderRight: "1px solid #eee", paddingRight: 20
+          }}>
 
             {/* Avatar */}
-            <div style={{ width: 120, height: 120, borderRadius: "50%", overflow: "hidden",
+            <div style={{
+              width: 120, height: 120, borderRadius: "50%", overflow: "hidden",
               margin: "0 auto 16px", border: "1px solid #ddd",
               background: displayAvatarUrl ? "#f9f9f9" : "#C0392B",
-              display: "flex", alignItems: "center", justifyContent: "center" }}>
+              display: "flex", alignItems: "center", justifyContent: "center"
+            }}>
               {displayAvatarUrl
                 ? <img src={displayAvatarUrl} alt="avatar"
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    referrerPolicy="no-referrer" />
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  referrerPolicy="no-referrer" />
                 : <span style={{ color: "#fff", fontSize: 50, fontWeight: 700 }}>{initials}</span>
               }
             </div>
@@ -509,10 +516,12 @@ export default function ProfilePage() {
               <input type="file" ref={fileInputRef} accept="image/*"
                 disabled={busy === "profile" || editMode}
                 onChange={handleFileChange}
-                style={{ width: "100%", fontSize: 12, padding: 6,
+                style={{
+                  width: "100%", fontSize: 12, padding: 6,
                   border: "1px dashed #ccc", borderRadius: 4, background: "#fafafa",
                   cursor: "pointer", boxSizing: "border-box",
-                  opacity: (busy === "profile" || editMode) ? 0.5 : 1 }} />
+                  opacity: (busy === "profile" || editMode) ? 0.5 : 1
+                }} />
               {croppedBlob && (
                 <Btn variant="primary" onClick={handleSaveAvatar} disabled={busy === "avatar"}
                   style={{ marginTop: 10, padding: "7px 12px", fontSize: 13 }}>
@@ -524,8 +533,10 @@ export default function ProfilePage() {
 
           {/* ── Content ── */}
           <div style={{ flex: 1, minWidth: 260, paddingLeft: 40 }}>
-            <h2 style={{ margin: "0 0 24px", color: "#333", fontSize: 22,
-              borderBottom: "2px solid #f0f0f0", paddingBottom: 10 }}>
+            <h2 style={{
+              margin: "0 0 24px", color: "#333", fontSize: 22,
+              borderBottom: "2px solid #f0f0f0", paddingBottom: 10
+            }}>
               Thông tin cá nhân
             </h2>
 
@@ -550,7 +561,7 @@ export default function ProfilePage() {
             <div style={{ marginTop: 28, display: "flex", flexDirection: "column", gap: 12 }}>
               {!editMode ? (
                 <Btn onClick={() => setEditMode(true)} disabled={busy === "avatar"}>
-                Thay đổi thông tin cá nhân
+                  Thay đổi thông tin cá nhân
                 </Btn>
               ) : (
                 <>
@@ -561,15 +572,15 @@ export default function ProfilePage() {
                     setForm({ username: user.username, email: user.email, tele_number: user.tele_number ?? "" });
                     setEditMode(false);
                   }} disabled={busy === "profile"}>
-                  Huỷ
+                    Huỷ
                   </Btn>
                 </>
               )}
               <Btn onClick={() => setPwModal(true)} disabled={editMode || busy === "avatar"}>
-              Đổi mật khẩu
+                Đổi mật khẩu
               </Btn>
               <Btn variant="danger" onClick={handleLogout} disabled={editMode || busy === "avatar"}>
-              Đăng xuất
+                Đăng xuất
               </Btn>
             </div>
           </div>

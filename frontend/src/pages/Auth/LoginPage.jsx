@@ -7,7 +7,7 @@ const LoginPage = () => {
     const [activeTab, setActiveTab] = useState('login');
     const [localError, setLocalError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
-    
+
 
     // Login Form State
     const [loginData, setLoginData] = useState({ username: '', password: '' });
@@ -23,8 +23,16 @@ const LoginPage = () => {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        if (params.get('error') === 'google_auth_failed') {
+        const err = params.get('error');
+
+        if (err === 'google_auth_failed') {
             setLocalError('Đăng nhập bằng Google thất bại. Vui lòng thử lại.');
+            window.history.replaceState({}, '', window.location.pathname);
+        } else if (err === 'facebook_auth_failed') {
+            setLocalError('Đăng nhập bằng Facebook thất bại. Vui lòng thử lại.');
+            window.history.replaceState({}, '', window.location.pathname);
+        } else if (err === 'facebook_email_required') {
+            setLocalError('Vui lòng cấp quyền email khi đăng nhập bằng Facebook.');
             window.history.replaceState({}, '', window.location.pathname);
         }
     }, []);
@@ -222,7 +230,17 @@ const LoginPage = () => {
 
                 .social-login-buttons {
                     display: flex;
+                    flex-direction: column;
                     gap: 10px;
+                }
+
+                .social-or-divider {
+                    text-align: center;
+                    font-size: 11px;
+                    color: #aaa;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    margin: 2px 0;
                 }
 
                 .social-btn {
@@ -249,6 +267,11 @@ const LoginPage = () => {
                     color: white;
                 }
 
+                .social-btn.facebook {
+                    background-color: #1877f2;
+                    color: white;
+                }
+
                 .switch-link {
                     text-align: center;
                     margin-top: 20px;
@@ -267,14 +290,14 @@ const LoginPage = () => {
 
             <div className="auth-box">
                 <div className="tab-buttons">
-                    <button 
-                        className={`tab-btn ${activeTab === 'login' ? 'active' : ''}`} 
+                    <button
+                        className={`tab-btn ${activeTab === 'login' ? 'active' : ''}`}
                         onClick={() => switchTab('login')}
                     >
                         <i className="fas fa-sign-in-alt"></i> Đăng nhập
                     </button>
-                    <button 
-                        className={`tab-btn ${activeTab === 'register' ? 'active' : ''}`} 
+                    <button
+                        className={`tab-btn ${activeTab === 'register' ? 'active' : ''}`}
                         onClick={() => switchTab('register')}
                     >
                         <i className="fas fa-user-plus"></i> Đăng ký
@@ -291,28 +314,28 @@ const LoginPage = () => {
                 <div className={`tab-content ${activeTab === 'login' ? 'active' : ''}`}>
                     <form onSubmit={handleLoginSubmit}>
                         <label>Tên người dùng / Email (*):</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             name="username"
                             value={loginData.username}
                             onChange={handleLoginChange}
-                            required 
-                            placeholder="Nhập tên người dùng hoặc email" 
+                            required
+                            placeholder="Nhập tên người dùng hoặc email"
                         />
 
                         <label>Mật khẩu (*):</label>
-                        <input 
-                            type="password" 
+                        <input
+                            type="password"
                             name="password"
                             value={loginData.password}
                             onChange={handleLoginChange}
-                            required 
-                            placeholder="Nhập mật khẩu" 
+                            required
+                            placeholder="Nhập mật khẩu"
                         />
 
-                        <button 
-                            type="button" 
-                            className="forgot-password" 
+                        <button
+                            type="button"
+                            className="forgot-password"
                             onClick={() => window.location.href = '/forgot-password'}
                         >
                             Quên mật khẩu?
@@ -332,9 +355,19 @@ const LoginPage = () => {
                     </div>
 
                     <div className="social-login-buttons">
-                        <button 
-                            type="button" 
-                            className="social-btn google" 
+                        <button
+                            type="button"
+                            className="social-btn facebook"
+                            onClick={() => { window.location.href = '/auth/facebook/redirect'; }}
+                        >
+                            <i className="fab fa-facebook-f"></i> Đăng nhập bằng Facebook
+                        </button>
+
+                        <div className="social-or-divider">or</div>
+
+                        <button
+                            type="button"
+                            className="social-btn google"
                             onClick={() => { window.location.href = '/auth/google/redirect'; }}
                         >
                             <i className="fab fa-google"></i> Đăng nhập bằng Google
@@ -346,57 +379,57 @@ const LoginPage = () => {
                 <div className={`tab-content ${activeTab === 'register' ? 'active' : ''}`}>
                     <form onSubmit={handleRegSubmit}>
                         <label>Tên người dùng (*):</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             name="username"
                             value={regData.username}
                             onChange={handleRegChange}
-                            required 
+                            required
                             maxLength="20"
-                            placeholder="Nhập tên người dùng (tối đa 20 ký tự)" 
+                            placeholder="Nhập tên người dùng (tối đa 20 ký tự)"
                         />
 
                         <label>Email (*):</label>
-                        <input 
-                            type="email" 
+                        <input
+                            type="email"
                             name="email"
                             value={regData.email}
                             onChange={handleRegChange}
                             required
                             maxLength="50"
-                            placeholder="ví dụ: a@gmail.com (tối đa 50 ký tự)" 
+                            placeholder="ví dụ: a@gmail.com (tối đa 50 ký tự)"
                         />
 
                         <label>Số điện thoại (*):</label>
-                        <input 
-                            type="text" 
+                        <input
+                            type="text"
                             name="phone"
                             value={regData.phone}
                             onChange={handleRegChange}
                             required
                             inputMode="numeric"
-                            maxLength="10" 
-                            placeholder="Nhập số điện thoại (10 số)" 
+                            maxLength="10"
+                            placeholder="Nhập số điện thoại (10 số)"
                         />
 
                         <label>Mật khẩu (*):</label>
-                        <input 
-                            type="password" 
+                        <input
+                            type="password"
                             name="password"
                             value={regData.password}
                             onChange={handleRegChange}
-                            required 
-                            placeholder="Tối thiểu 6 ký tự" 
+                            required
+                            placeholder="Tối thiểu 6 ký tự"
                         />
 
                         <label>Xác nhận mật khẩu (*):</label>
-                        <input 
-                            type="password" 
+                        <input
+                            type="password"
                             name="password_confirmation"
                             value={regData.password_confirmation}
                             onChange={handleRegChange}
-                            required 
-                            placeholder="Nhập lại mật khẩu" 
+                            required
+                            placeholder="Nhập lại mật khẩu"
                         />
 
                         <button type="submit" className="btn-primary large-btn" disabled={loading}>
