@@ -60,7 +60,6 @@ class BillController extends Controller
             'items.*.quantity' => 'required|integer|min:1',
             // price_at_order KHÔNG còn được validate/dùng để tính tiền — giá thật
             // luôn được lấy từ bảng dishes ở server, không tin giá trị client gửi.
-            'points_to_use' => 'nullable|integer|min:0',
             'delivery.address' => 'required_if:order_type,delivery|string',
             'delivery.phone' => 'required_if:order_type,delivery|string',
             'booking_table' => 'required_if:order_type,booking_table|array',
@@ -100,19 +99,9 @@ class BillController extends Controller
                 ];
             }
 
-            // ---- Áp dụng giảm giá bằng điểm thưởng (nếu có yêu cầu) ----
-            // Luôn lấy số điểm THẬT của user từ DB, không tin field nào client gửi
-            // ngoài points_to_use (số điểm MUỐN dùng) — số điểm dùng thực tế vẫn
-            // bị chặn lại theo số điểm user thực sự sở hữu.
             $user = $request->user();
-            $pointsRequested = $validated['points_to_use'] ?? 0;
-
-            $userTotalPoints = $user->getOrCreateStatistics()->total_points ?? 0;
-            $maxUsable = Points::maxUsablePoints((int) $userTotalPoints, $subtotalBeforePoints);
-            $pointsUsed = min($pointsRequested, $maxUsable);
-
-            $pointsDiscountAmount = Points::convertPointsToDiscount($pointsUsed);
-            $totalAmount = round($subtotalBeforePoints - $pointsDiscountAmount, 2);
+            
+            $totalAmount = round($subtotalBeforePoints, 2);
 
             // Generate IDs
             $orderId = $this->generateOrderCode();
@@ -169,7 +158,7 @@ class BillController extends Controller
                         'booking_date'     => $validated['booking_table']['start_date'],
                         'start_time'       => $startTime,
                         'end_time'         => $endTime,
-                        'B_payment_status' => 'paid',
+                        'B_payment_status' => 'unpaid',
                         'booking_status'   => 'waiting_info',
                     ]);
                 }
@@ -180,33 +169,13 @@ class BillController extends Controller
             $bill = Bill::create([
                 'bill_id'                          => $billId,
                 'order_id'                         => $orderId,
+                'user_id'                          => $user->user_id,
                 'total_price'                      => $totalAmount,
-                'subtotal_before_points_discount'  => $subtotalBeforePoints,
-                'points_used'                      => $pointsUsed,
-                'points_discount_amount'           => $pointsDiscountAmount,
-                'payment_method'                   => $isBooking ? 'cash' : 'unpaid',
+                'payment_method'                   => $validated['payment_method'] ?? 'unpaid',
                 'created_at'                        => now(),
             ]);
 
-            // ---- Trừ điểm đã dùng + ghi nhận lịch sử (nếu có dùng điểm) ----
-            // Việc TÍCH điểm thưởng mới (points_earned) cho chính đơn hàng này
-            // chỉ thực hiện SAU KHI thanh toán thành công (processPayment() hoặc
-            // VnpayController::vnpayIpn()), không tích ở đây — vì lúc store()
-            // bill có thể vẫn ở trạng thái "unpaid" (delivery), tích điểm sớm
-            // sẽ sai nếu khách không thanh toán.
-            if ($pointsUsed > 0) {
-                $stats = $user->getOrCreateStatistics();
-                $stats->decrement('total_points', $pointsUsed);
-
-                Points::create([
-                    'user_id'              => $user->user_id,
-                    'bill_id'              => $bill->bill_id,
-                    'points_earned'        => 0,
-                    'points_redeemed'      => $pointsUsed,
-                    'booking_total_price'  => 0,
-                    'delivery_total_price' => 0,
-                ]);
-            }
+            // ---- Đã xóa logic giảm giá bằng điểm cũ ở đây ----
 
             DB::commit();
 
@@ -214,8 +183,6 @@ class BillController extends Controller
                 'data' => [
                     'bill_id'                => $bill->bill_id,
                     'subtotal'               => $subtotalBeforePoints,
-                    'points_used'            => $pointsUsed,
-                    'points_discount_amount' => $pointsDiscountAmount,
                     'total_price'            => $totalAmount,
                 ],
                 'message' => 'Bill created successfully',
@@ -483,5 +450,96 @@ class BillController extends Controller
         $pdf = Pdf::loadView('pdf.invoice', compact('bill'));
 
         return $pdf->stream('hoa-don-' . $bill->bill_id . '.pdf');
+    }
+
+    /**
+     * Pay with Points
+     */
+    public function payWithPoints(Request $request, Bill $bill)
+    {
+        $user = $request->user();
+        if ($bill->order->user_id !== $user->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $isPaid = false;
+        if ($bill->order && $bill->order->order_type === 'delivery' && $bill->delivery) {
+            $isPaid = $bill->delivery->D_payment_status === 'paid';
+        } elseif ($bill->order && $bill->order->order_type === 'booking_table' && $bill->bookingTable->isNotEmpty()) {
+            $isPaid = $bill->bookingTable->first()->B_payment_status === 'paid';
+        }
+
+        if ($isPaid) {
+            return response()->json(['message' => 'Hóa đơn đã được thanh toán'], 400);
+        }
+
+        $amount = (float) $bill->total_price;
+        $requiredPoints = floor($amount / 100);
+
+        if ($user->points < $requiredPoints) {
+            return response()->json([
+                'message' => 'Bạn không có đủ điểm để thanh toán hóa đơn này.',
+                'required' => $requiredPoints,
+                'current' => $user->points
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            $user->points -= $requiredPoints;
+            $user->updateMembership();
+            $user->save();
+
+            $bill->update([
+                'payment_method' => 'Points',
+            ]);
+
+            $order = $bill->order;
+
+            if ($order->order_type === 'delivery' && $bill->delivery !== null) {
+                $bill->delivery->update([
+                    'D_payment_status' => 'paid',
+                    'delivery_status'  => 'waiting_approval',
+                    'approved_at'      => now(),
+                ]);
+            }
+
+            if ($order->order_type === 'booking_table') {
+                $bookingTables = $bill->bookingTable;
+                if ($bookingTables->isNotEmpty()) {
+                    foreach ($bookingTables as $bt) {
+                        $bt->update([
+                            'B_payment_status' => 'paid',
+                            'booking_status'   => 'waiting_confirmation',
+                        ]);
+                    }
+                }
+            }
+
+            // Ghi lại lịch sử Points
+            Points::create([
+                'user_id'              => $user->user_id,
+                'bill_id'              => $bill->bill_id,
+                'points_earned'        => 0,
+                'points_redeemed'      => $requiredPoints,
+                'booking_total_price'  => $order->order_type === 'booking_table' ? $amount : 0,
+                'delivery_total_price' => $order->order_type === 'delivery' ? $amount : 0,
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'data' => [
+                    'bill_id'        => $bill->bill_id,
+                    'payment_status' => 'completed',
+                    'points_used'    => $requiredPoints,
+                    'remaining_points' => $user->points,
+                ],
+                'message' => 'Thanh toán bằng điểm thành công'
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 }

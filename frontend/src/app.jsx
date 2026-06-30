@@ -8,6 +8,7 @@ import { CartProvider } from './context/CartContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PaymentResultPage from './pages/Payment/PaymentResultPage';
+import ScrollToTop from './components/ScrollToTop';
 
 // Pages
 import HomeApp from './pages/Home/HomeApp';
@@ -59,6 +60,7 @@ import OrderManagement from './pages/Admin/OrderManagement';
 function App() {
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <AuthProvider>
         <CartProvider>
           <Layout>

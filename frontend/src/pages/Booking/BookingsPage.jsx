@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { bookingService, billService, vnpayService, extractListData } from '../../services/api';
+import { bookingService, billService, vnpayService, extractListData, userAPI } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState, Modal } from '../../components/Shared';
+import { useAuthContext } from '../../context/AuthContext';
 
+
+const BOOKING_SESSION_KEY = 'booking_checkout_session';
 
 const BookingsPage = () => {
     const [bookings, setBookings] = useState([]);
@@ -11,9 +14,17 @@ const BookingsPage = () => {
     // Cart states
     const [bookingCart, setBookingCart] = useState([]);
 
-    // Wizard states
     const [checkoutStage, setCheckoutStage] = useState('wizard'); // wizard, payment, processing
     const [wizardStep, setWizardStep] = useState(1);
+
+    // Payment locking: null | 'vnpay' | 'points'
+    const [payingWith, setPayingWith] = useState(null);
+
+    // Points Payment states
+    const { user, fetchUser } = useAuthContext();
+    const [pointsModalType, setPointsModalType] = useState(null); // 'insufficient' | 'confirm' | null
+    const [pointsNeeded, setPointsNeeded] = useState(0);
+    const [currentPoints, setCurrentPoints] = useState(0);
 
     // Booking Form State
     const [bookingDate, setBookingDate] = useState('');
@@ -30,14 +41,46 @@ const BookingsPage = () => {
     const [unavailableTables, setUnavailableTables] = useState([]);
     const [isCheckingOverlap, setIsCheckingOverlap] = useState(false);
 
+    // Lưu trạng thái đã xác nhận vào sessionStorage
+    const saveCheckoutSession = (stage, formData) => {
+        sessionStorage.setItem(BOOKING_SESSION_KEY, JSON.stringify({ stage, ...formData }));
+    };
+
+    // Xóa session khi hoàn tất / hủy
+    const clearCheckoutSession = () => {
+        sessionStorage.removeItem(BOOKING_SESSION_KEY);
+    };
+
     useEffect(() => {
         fetchBookings();
         const cart = JSON.parse(localStorage.getItem('booking_cart')) || [];
         setBookingCart(cart);
 
-        // Set default date to today
-        const today = new Date().toISOString().split('T')[0];
-        setBookingDate(today);
+        // Khôi phục session nếu đã xác nhận thông tin trước đó
+        const savedSession = sessionStorage.getItem(BOOKING_SESSION_KEY);
+        if (savedSession) {
+            try {
+                const session = JSON.parse(savedSession);
+                if (session.stage === 'payment') {
+                    setCheckoutStage('payment');
+                    setWizardStep(5);
+                    if (session.bookingDate) setBookingDate(session.bookingDate);
+                    if (session.startH) setStartH(session.startH);
+                    if (session.startM) setStartM(session.startM);
+                    if (session.endH) setEndH(session.endH);
+                    if (session.endM) setEndM(session.endM);
+                    if (session.totalTables) setTotalTables(session.totalTables);
+                    if (session.tableTypes) setTableTypes(session.tableTypes);
+                    if (session.selectedTables) setSelectedTables(session.selectedTables);
+                }
+            } catch (e) {
+                sessionStorage.removeItem(BOOKING_SESSION_KEY);
+            }
+        } else {
+            // Set default date to today only nếu không có session
+            const today = new Date().toISOString().split('T')[0];
+            setBookingDate(today);
+        }
     }, []);
 
     const cartTotal = bookingCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -98,6 +141,17 @@ const BookingsPage = () => {
             }
             setWizardStep(5);
         } else if (wizardStep === 5) {
+            // Lưu toàn bộ trạng thái vào sessionStorage để khóa
+            saveCheckoutSession('payment', {
+                bookingDate,
+                startH,
+                startM,
+                endH,
+                endM,
+                totalTables,
+                tableTypes,
+                selectedTables,
+            });
             setCheckoutStage('payment');
         }
     };
@@ -162,7 +216,8 @@ const BookingsPage = () => {
     };
 
     const handlePayment = async () => {
-        setCheckoutStage('processing');
+        if (payingWith) return; // chặn double-click
+        setPayingWith('vnpay');
 
         try {
             const orderData = {
@@ -190,13 +245,95 @@ const BookingsPage = () => {
                 order_type: 'booking_table',
             });
 
-            // 3. Redirect sang VNPay — dọn cart sau khi quay về ở PaymentResultPage
+            // 3. Xóa session vì sẽ chuyển sang trang VNPay
+            clearCheckoutSession();
+            // 4. Redirect sang VNPay — dọn cart sau khi quay về ở PaymentResultPage
             window.location.href = vnpayRes.data.payment_url;
 
         } catch (err) {
             setError(err.response?.data?.message || 'Lỗi đặt bàn');
-            setCheckoutStage('payment');
+            setPayingWith(null);
         }
+    };
+
+    const handlePointsPaymentClick = async () => {
+        try {
+            // Lấy điểm mới nhất từ server thay vì cache ở AuthContext (localStorage)
+            const res = await userAPI.getProfile();
+            const freshPoints = res.data?.data?.points || 0;
+            setCurrentPoints(freshPoints);
+
+            const needed = Math.floor(cartTotal / 100);
+            setPointsNeeded(needed);
+            
+            if (freshPoints < needed) {
+                setPointsModalType('insufficient');
+            } else {
+                setPointsModalType('confirm');
+            }
+        } catch (err) {
+            setError('Không thể lấy thông tin điểm: ' + (err.response?.data?.message || err.message));
+        }
+    };
+
+    const handleConfirmPointsPayment = async () => {
+        if (payingWith) return; // chặn double-click
+        setPayingWith('points');
+        try {
+            const orderData = {
+                order_type: 'booking_table',
+                booking_table: {
+                    tables: selectedTables,
+                    start_date: bookingDate,
+                    start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
+                    end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
+                },
+                items: bookingCart.map(item => ({
+                    dish_id: item.dish_id,
+                    quantity: item.quantity,
+                })),
+            };
+
+            // 1. Tạo bill trước
+            const billRes = await billService.storeBill(orderData);
+            const billId = billRes.data.data.bill_id;
+
+            // 2. Thanh toán bằng điểm
+            await billService.payWithPoints(billId);
+
+            // 3. Xóa cart, session và redirect
+            localStorage.removeItem('booking_cart');
+            clearCheckoutSession();
+            setBookingCart([]);
+            setPointsModalType(null);
+            if (fetchUser) fetchUser(); // update user points
+            window.location.href = `/payment-result?status=success&code=00&order_type=booking_table&bill_id=${billId}`;
+        } catch (err) {
+            setError('Lỗi thanh toán bằng điểm: ' + (err.response?.data?.message || err.message));
+            setPointsModalType(null);
+            setPayingWith(null);
+        }
+    };
+
+    const checkMembershipDowngrade = () => {
+        if (!currentPoints) return false;
+
+        // Bước 1: Tính bậc hiện tại từ số điểm đang có
+        let currentMembership = 'bronze';
+        if (currentPoints >= 10000) currentMembership = 'diamond';
+        else if (currentPoints >= 6000) currentMembership = 'platinum';
+        else if (currentPoints >= 3000) currentMembership = 'gold';
+        else if (currentPoints >= 1000) currentMembership = 'silver';
+
+        // Bước 2: Ngưỡng điểm tối thiểu để duy trì bậc đó
+        const threshold = { bronze: 0, silver: 1000, gold: 3000, platinum: 6000, diamond: 10000 };
+        const minRequired = threshold[currentMembership] ?? 0;
+
+        // Bước 3: Điểm còn lại sau khi thanh toán
+        const newPoints = currentPoints - pointsNeeded;
+
+        // Hạ bậc nếu điểm còn lại dưới ngưỡng tối thiểu
+        return newPoints < minRequired;
     };
 
     const fetchBookings = async () => {
@@ -521,21 +658,46 @@ const BookingsPage = () => {
                                             <h3 className="font-bold text-lg mb-2">Thanh toán đơn đặt bàn</h3>
                                             <p className="text-gray-600 text-sm mb-4">Mọi thông tin đã được chốt. Vui lòng tiến hành thanh toán để hoàn tất.</p>
                                         </div>
+                                        {/* Nút VNPay */}
                                         <button
                                             onClick={handlePayment}
-                                            disabled={checkoutStage === 'processing'}
-                                            className="w-full bg-green-600 text-white font-bold py-3 rounded hover:bg-green-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                                            disabled={!!payingWith}
+                                            className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 mb-3 ${
+                                                payingWith === 'vnpay'
+                                                    ? 'bg-blue-600 text-white cursor-not-allowed'
+                                                    : payingWith === 'points'
+                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                            }`}
                                         >
-                                            {checkoutStage === 'processing' ? (
-                                                <><i className="fas fa-spinner fa-spin"></i> Đang xử lý thanh toán...</>
+                                            {payingWith === 'vnpay' ? (
+                                                <><i className="fas fa-spinner fa-spin"></i> Đang xử lý...</>
                                             ) : (
-                                                <><i className="fas fa-credit-card"></i> Thanh toán</>
+                                                <><i className="fas fa-credit-card"></i> Thanh toán bằng VNPay</>
+                                            )}
+                                        </button>
+                                        {/* Nút Điểm */}
+                                        <button
+                                            onClick={handlePointsPaymentClick}
+                                            disabled={!!payingWith}
+                                            className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 ${
+                                                payingWith === 'points'
+                                                    ? 'bg-green-600 text-white cursor-not-allowed'
+                                                    : payingWith === 'vnpay'
+                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                    : 'bg-green-600 text-white hover:bg-green-700'
+                                            }`}
+                                        >
+                                            {payingWith === 'points' ? (
+                                                <><i className="fas fa-spinner fa-spin"></i> Đang xử lý...</>
+                                            ) : (
+                                                <><i className="fas fa-coins"></i> Thanh toán bằng Điểm</>
                                             )}
                                         </button>
                                         <button
-                                            onClick={() => setCheckoutStage('wizard')}
-                                            disabled={checkoutStage === 'processing'}
-                                            className="w-full mt-2 text-gray-500 hover:text-red-600 text-sm font-bold py-2"
+                                            onClick={() => { clearCheckoutSession(); setCheckoutStage('wizard'); }}
+                                            disabled={!!payingWith}
+                                            className="w-full mt-2 text-gray-500 hover:text-red-600 text-sm font-bold py-2 disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
                                             Quay lại sửa thông tin
                                         </button>
@@ -545,6 +707,69 @@ const BookingsPage = () => {
                         </div>
                     )}
                 </div>
+
+                {/* Points Modal: Insufficient */}
+                {pointsModalType === 'insufficient' && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                        <div className="bg-white rounded-lg w-full max-w-md p-6 relative">
+                            <button 
+                                onClick={() => setPointsModalType(null)}
+                                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+                            >
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                            <h3 className="text-xl font-bold text-red-600 mb-4 text-center">Không đủ điểm</h3>
+                            <p className="text-gray-700 text-center mb-6">
+                                Bạn không có đủ điểm để thanh toán hóa đơn này. <br/>
+                                Hiện bạn đang có <strong className="text-red-600">{currentPoints}</strong> điểm.
+                            </p>
+                            <button 
+                                onClick={() => setPointsModalType(null)}
+                                className="w-full bg-red-600 text-white font-bold py-2 rounded hover:bg-red-700"
+                            >
+                                Ok
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Points Modal: Confirm */}
+                {pointsModalType === 'confirm' && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                        <div className="bg-white rounded-lg w-full max-w-md p-6 relative">
+                            <button 
+                                onClick={() => setPointsModalType(null)}
+                                className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+                            >
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                            <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">Xác nhận thanh toán</h3>
+                            <p className="text-gray-700 text-center mb-4">
+                                Bạn có chắc muốn dùng điểm để thanh toán hóa đơn này? <br/>
+                                Hiện bạn đang có <strong className="text-red-600">{currentPoints}</strong> điểm.
+                            </p>
+                            {checkMembershipDowngrade() && (
+                                <p className="text-yellow-700 bg-yellow-50 border border-yellow-200 p-2 rounded text-sm text-center mb-4">
+                                    ⚠️ Thanh toán hóa đơn này có thể khiến bạn bị hạ bậc thành viên.
+                                </p>
+                            )}
+                            <div className="flex gap-4">
+                                <button 
+                                    onClick={() => setPointsModalType(null)}
+                                    className="flex-1 bg-gray-200 text-gray-800 font-bold py-2 rounded hover:bg-gray-300"
+                                >
+                                    Hủy
+                                </button>
+                                <button 
+                                    onClick={handleConfirmPointsPayment}
+                                    className="flex-1 bg-red-600 text-white font-bold py-2 rounded hover:bg-red-700"
+                                >
+                                    Xác nhận
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <h2 className="text-3xl font-bold mb-6 text-gray-800">Các đơn đã đặt</h2>
 

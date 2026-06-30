@@ -23,6 +23,7 @@ class User extends Authenticatable
         'tele_number',
         'avatar_url',
         'role',
+        'points',
         'membership',
          'provider',
         'provider_id',
@@ -86,18 +87,40 @@ class User extends Authenticatable
     }
 
     /**
-     * Cộng điểm thưởng vào tổng điểm hiện có của user.
-     *
-     * Placeholder tạm: chưa có cột "points"/"total_points" riêng trên
-     * bảng users theo migration hiện tại — nếu sau này thêm cột đó, sửa
-     * lại hàm này để $this->increment('points', $amount). Hiện tại điểm
-     * tổng được phản ánh qua Statistics::total_points (xem statistics()).
+     * Cộng điểm và cập nhật hạng
      */
     public function incrementPoints(int $amount): void
     {
-        // Không làm gì thêm ở đây — Statistics::addPoints() trong
-        // BillController/VnpayController đã là nguồn ghi nhận tổng điểm.
-        // Giữ method này để các lời gọi hiện có không bị lỗi "method không tồn tại".
+        $this->increment('points', $amount);
+        $this->updateMembership();
+    }
+
+    /**
+     * Cập nhật bậc thành viên dựa trên điểm hiện tại
+     */
+    public function updateMembership(): void
+    {
+        if ($this->role === 'admin' || $this->membership === 'administrator') {
+            return;
+        }
+
+        $points = $this->points;
+        $newMembership = 'bronze';
+
+        if ($points >= 10000) {
+            $newMembership = 'diamond';
+        } elseif ($points >= 6000) {
+            $newMembership = 'platinum';
+        } elseif ($points >= 3000) {
+            $newMembership = 'gold';
+        } elseif ($points >= 1000) {
+            $newMembership = 'silver';
+        }
+
+        if ($this->membership !== $newMembership) {
+            $this->membership = $newMembership;
+            $this->save();
+        }
     }
 
     /**

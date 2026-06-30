@@ -40,6 +40,11 @@ const MenuManagement = () => {
     const [previewImage, setPreviewImage] = useState(null);
     const fileInputRef = useRef(null);
 
+    // FIX: dùng để phân biệt "bấm ra ngoài để đóng" với "kéo chọn text trong modal
+    // rồi lỡ thả chuột ra ngoài" — chỉ đóng khi cả mousedown lẫn mouseup đều rơi
+    // đúng trên lớp nền (backdrop), không phải trên nội dung modal bên trong.
+    const mouseDownOnBackdrop = useRef(false);
+
     useEffect(() => {
         fetchData();
     }, []);
@@ -176,6 +181,17 @@ const MenuManagement = () => {
         }
     };
 
+    const handleBackdropMouseDown = (e) => {
+        mouseDownOnBackdrop.current = e.target === e.currentTarget;
+    };
+
+    const handleBackdropMouseUp = (e) => {
+        if (mouseDownOnBackdrop.current && e.target === e.currentTarget) {
+            handleCloseModal();
+        }
+        mouseDownOnBackdrop.current = false;
+    };
+
     if (loading) return <Loading />;
 
     return (
@@ -272,12 +288,10 @@ const MenuManagement = () => {
                 <div
                     className="fixed inset-0 z-50 flex items-center justify-center p-4"
                     style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
-                    onClick={handleCloseModal}
+                    onMouseDown={handleBackdropMouseDown}
+                    onMouseUp={handleBackdropMouseUp}
                 >
-                    <div
-                        className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-md overflow-hidden">
                         <div className="bg-red-600 px-6 py-4 flex justify-between items-center">
                             <h3 className="text-xl font-bold text-white">
                                 {editMode ? 'Sửa món ăn' : 'Thêm món ăn mới'}

@@ -49,14 +49,37 @@ function Toast({ toast }) {
 }
 
 // ── Modal thường ─────────────────────────────────────────────────────────────
+// FIX: trước đây dùng onClick={onClose} trên backdrop => chỉ cần bôi đen text/input
+// trong modal rồi kéo chuột lố ra ngoài (mousedown trong modal, mouseup ngoài backdrop)
+// là trình duyệt tính click "nổi" lên backdrop và tự đóng modal dù không hề bấm ra ngoài.
+// Sửa: chỉ đóng khi CẢ mousedown LẪN mouseup đều xảy ra đúng trên backdrop (không phải
+// trên nội dung modal bên trong).
 function Modal({ show, onClose, title, children }) {
+  const mouseDownOnBackdrop = useRef(false);
+
   if (!show) return null;
+
+  const handleBackdropMouseDown = (e) => {
+    mouseDownOnBackdrop.current = e.target === e.currentTarget;
+  };
+
+  const handleBackdropMouseUp = (e) => {
+    if (mouseDownOnBackdrop.current && e.target === e.currentTarget) {
+      onClose();
+    }
+    mouseDownOnBackdrop.current = false;
+  };
+
   return (
-    <div onClick={onClose} style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
-      zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
-    }}>
-      <div onClick={(e) => e.stopPropagation()} style={{
+    <div
+      onMouseDown={handleBackdropMouseDown}
+      onMouseUp={handleBackdropMouseUp}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+        zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center",
+      }}
+    >
+      <div style={{
         background: "#fff", padding: 28, borderRadius: 10,
         width: "90%", maxWidth: 440, boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
       }}>
@@ -99,6 +122,8 @@ async function getCroppedBlob(imageUrl, cropPixels, outputSize = 300) {
 }
 
 // ── Cropper Modal (giờ dùng react-easy-crop: mask tròn + kéo + zoom) ───────
+// Modal này vốn không có bug (không có onClick đóng theo backdrop, chỉ đóng qua nút
+// "Huỷ"), nhưng vẫn giữ nguyên logic, không đổi gì về hành vi đóng/mở.
 function CropperModal({ show, imageUrl, onClose, onCrop }) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -501,12 +526,16 @@ export default function ProfilePage() {
             <p style={{ color: "#C0392B", fontWeight: 700, margin: "0 0 8px", fontSize: 15 }}>
               Vai trò: {user?.role}
             </p>
-            <p style={{ color: "#555", margin: "0 0 8px", fontSize: 15, fontWeight: 600 }}>
-              Cấp bậc thành viên: <strong style={{ color: "#333" }}>{user?.membership}</strong>
-            </p>
-            <p style={{ color: "#555", margin: "0 0 16px", fontSize: 15, fontWeight: 600 }}>
-              Điểm tích lũy: <strong style={{ color: "#C0392B" }}>{user?.total_points ?? 0}</strong>
-            </p>
+            {user?.role !== 'admin' && (
+              <>
+                <p style={{ color: "#555", margin: "0 0 8px", fontSize: 15, fontWeight: 600 }}>
+                  Cấp bậc thành viên: <strong style={{ color: "#333" }}>{user?.membership}</strong>
+                </p>
+                <p style={{ color: "#555", margin: "0 0 16px", fontSize: 15, fontWeight: 600 }}>
+                  Điểm tích lũy: <strong style={{ color: "#C0392B" }}>{user?.points ?? 0}</strong>
+                </p>
+              </>
+            )}
 
             {/* Upload avatar */}
             <div style={{ textAlign: "left" }}>

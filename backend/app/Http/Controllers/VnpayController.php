@@ -129,6 +129,13 @@ class VnpayController extends Controller
 
         if (!$result['is_valid_signature']) {
             Log::warning('vnpayReturn invalid signature', ['txn_ref' => $vnp_TxnRef]);
+        } else if ($result['is_success']) {
+            // Thực hiện cập nhật trạng thái đơn hàng (fallback cho IPN)
+            // Vì khi dùng ngrok/cloudflare trong môi trường dev, IPN của VNPAY thường
+            // không gọi được do URL thay đổi liên tục và chưa cập nhật trên Dashboard.
+            $vnpAmount = ($result['data']['vnp_Amount'] ?? 0) / 100;
+            $this->processPaymentConfirmation($billId, $vnpAmount);
+            Log::info('vnpayReturn fallback payment confirmation executed', ['bill_id' => $billId]);
         }
 
         // ✅ Lấy order_type từ bill để truyền về frontend
@@ -202,31 +209,9 @@ class VnpayController extends Controller
         $transactionStatus = $result['data']['vnp_TransactionStatus'] ?? '';
 
         if ($responseCode === '00' && $transactionStatus === '00') {
-            DB::beginTransaction();
-            try {
-                $record->{$paidField}   = 'paid';
-                $record->{$statusField} = $nextStatus;
-                $record->save();
-
-                // Cập nhật payment_method trên bill thành 'vnpay' — trước đó
-                // bill được tạo với payment_method = 'unpaid' (xem BillController::store).
-                $bill->payment_method = 'vnpay';
-                $bill->save();
-
-                // Điểm thưởng tính SAU khi trạng thái thanh toán đã chắc chắn
-                // là 'paid', và thống kê tính SAU điểm thưởng — đúng thứ tự
-                // ưu tiên an toàn dữ liệu mà bạn muốn.
-                $this->awardPointsAndStats($bill, $bill->order);
-
-                DB::commit();
-
+            if ($this->processPaymentConfirmation($billId, $vnpAmount)) {
                 Log::info('VNPay IPN success', ['bill_id' => $billId]);
-            } catch (\Throwable $e) {
-                DB::rollBack();
-                Log::error('VNPay IPN update failed', [
-                    'bill_id' => $billId,
-                    'error'   => $e->getMessage(),
-                ]);
+            } else {
                 return response()->json(['RspCode' => '99', 'Message' => 'Unknown error']);
             }
         } else {
@@ -243,6 +228,46 @@ class VnpayController extends Controller
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
+
+    private function processPaymentConfirmation($billId, $vnpAmount): bool
+    {
+        $bill = Bill::with('order.user')->where('bill_id', $billId)->first();
+        if (!$bill || !$bill->order) {
+            return false;
+        }
+
+        if (abs((float) $bill->total_price - (float) $vnpAmount) > 0.01) {
+            return false;
+        }
+
+        [$record, $paidField, $statusField, $nextStatus] = $this->resolveOrderRecord($bill->order);
+
+        if (!$record || $record->{$paidField} === 'paid') {
+            return true; // Consider it success if already paid
+        }
+
+        DB::beginTransaction();
+        try {
+            $record->{$paidField}   = 'paid';
+            $record->{$statusField} = $nextStatus;
+            $record->save();
+
+            $bill->payment_method = 'vnpay';
+            $bill->save();
+
+            $this->awardPointsAndStats($bill, $bill->order);
+
+            DB::commit();
+            return true;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('VNPay payment update failed', [
+                'bill_id' => $billId,
+                'error'   => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
 
     /**
      * Verify chữ ký VNPAY — build hashData theo đúng chuẩn code mẫu (urlencode thủ công).
@@ -347,7 +372,24 @@ class VnpayController extends Controller
             return;
         }
 
-        $pointsEarned = Points::calculatePoints($amount);
+        $basePoints = floor($amount / 1000);
+        $bonusPoints = 0;
+        
+        if ($amount >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {
+            $bonusMap = [
+                'bronze' => 10,
+                'silver' => 20,
+                'gold' => 30,
+                'platinum' => 40,
+                'diamond' => 50,
+            ];
+            $bonusPoints = $bonusMap[$user->membership] ?? 0;
+        }
+
+        $pointsEarned = $basePoints + $bonusPoints;
+
+        // Cộng điểm có thể tiêu (balance) và cập nhật membership
+        $user->incrementPoints($pointsEarned);
 
         Points::create([
             'user_id'              => $user->user_id,

@@ -47,6 +47,7 @@ class UserController extends Controller
                 'avatar_url'  => $this->resolveAvatarUrl($user),
                 'role'        => $user->role,
                 'membership'  => $user->membership,
+                'points'      => $user->points,
                 'created_at'  => $user->created_at,
             ],
         ]);

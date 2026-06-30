@@ -231,7 +231,12 @@ class AuthController extends Controller
 
         // Chưa có thư mục (user set avatar lần đầu) => dò không thấy thì tạo mới
         if (!file_exists($destinationPath)) {
-            mkdir($destinationPath, 0755, true);
+            if (!@mkdir($destinationPath, 0755, true) && !is_dir($destinationPath)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không thể tạo thư mục lưu ảnh.'
+                ], 500);
+            }
         }
 
         // Đặt tên file theo STT tăng dần (1, 2, 3, ...) dựa trên các ảnh đã có sẵn,

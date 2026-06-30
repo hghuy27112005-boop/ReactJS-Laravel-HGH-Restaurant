@@ -18,7 +18,7 @@ const MenuPage = () => {
 
     const [suggestions, setSuggestions] = useState([]);
     const [showDropdown, setShowDropdown] = useState(false);
-    
+
     // Modal states
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedDish, setSelectedDish] = useState(null);
@@ -128,7 +128,7 @@ const MenuPage = () => {
         const currentCart = JSON.parse(localStorage.getItem(cartKey)) || [];
 
         const existingItemIndex = currentCart.findIndex(item => item.dish_id === selectedDish.dish_id);
-        
+
         if (existingItemIndex > -1) {
             currentCart[existingItemIndex].quantity += qty;
         } else {
@@ -143,7 +143,7 @@ const MenuPage = () => {
 
         localStorage.setItem(cartKey, JSON.stringify(currentCart));
         setIsModalOpen(false);
-        
+
         alert(`Thành công! Đã thêm ${qty} ${selectedDish.dish_name} vào giỏ hàng ${orderType === 'mang-ve' ? 'giao hàng' : 'đặt bàn'}.`);
     };
 

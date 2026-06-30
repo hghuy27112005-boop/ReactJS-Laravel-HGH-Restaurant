@@ -62,6 +62,8 @@ export const billAPI = {
     calculateTotal: (id) => axiosInstance.post(`/bills/${id}/calculate-total`),
     processPayment: (id, paymentData) =>
         axiosInstance.post(`/bills/${id}/payment`, paymentData),
+    payWithPoints: (id) =>
+        axiosInstance.post(`/bills/${id}/pay-with-points`),
     exportPdf: (billId) =>
         axiosInstance.get(`/bills/${billId}/export-pdf`, { responseType: 'blob' }),
 };
@@ -207,6 +209,7 @@ export const billService = {
     getBills: (filters) => myBillsAPI.getAll(filters),
     storeBill: (data) => billAPI.create(data),
     processPayment: (id, data) => billAPI.processPayment(id, data),
+    payWithPoints: (id) => billAPI.payWithPoints(id),
     exportPdf: (billId) => billAPI.exportPdf(billId),
 };
 

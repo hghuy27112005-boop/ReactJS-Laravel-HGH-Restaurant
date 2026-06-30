@@ -35,6 +35,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::apiResource('bills', \App\Http\Controllers\BillController::class);
     Route::post('bills/{bill}/calculate-total', [\App\Http\Controllers\BillController::class, 'calculateTotal']);
     Route::post('bills/{bill}/payment', [\App\Http\Controllers\BillController::class, 'processPayment']);
+    Route::post('bills/{bill}/pay-with-points', [\App\Http\Controllers\BillController::class, 'payWithPoints']);
     Route::get('bills/{bill}/export-pdf', [\App\Http\Controllers\BillController::class, 'exportPDF']);
 
     // Orders

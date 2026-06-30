@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { billService, extractListData } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState } from '../../components/Shared';
 
@@ -23,6 +23,11 @@ const OrdersPage = () => {
     const [statusFilter, setStatusFilter] = useState('all');
 
     const [detailBill, setDetailBill] = useState(null); // bill đang xem chi tiết (null = đóng modal)
+
+    // FIX: chỉ đóng modal khi cả mousedown lẫn mouseup đều rơi đúng trên lớp nền
+    // (backdrop), tránh trường hợp bôi đen text trong bảng chi tiết rồi lỡ kéo
+    // chuột vọt ra ngoài mới thả tay làm modal tự đóng oan.
+    const mouseDownOnBackdrop = useRef(false);
 
     useEffect(() => {
         fetchOrders();
@@ -117,6 +122,17 @@ const OrdersPage = () => {
         }
     };
 
+    const handleBackdropMouseDown = (e) => {
+        mouseDownOnBackdrop.current = e.target === e.currentTarget;
+    };
+
+    const handleBackdropMouseUp = (e) => {
+        if (mouseDownOnBackdrop.current && e.target === e.currentTarget) {
+            setDetailBill(null);
+        }
+        mouseDownOnBackdrop.current = false;
+    };
+
     if (loading) return <Loading />;
 
     const formatted = getFilteredOrders();
@@ -138,11 +154,10 @@ const OrdersPage = () => {
                                 <button
                                     key={f.id}
                                     onClick={() => handleTypeFilterChange(f.id)}
-                                    className={`px-4 py-2 rounded font-semibold whitespace-nowrap ${
-                                        typeFilter === f.id
-                                            ? 'bg-red-600 text-white'
-                                            : 'bg-white border border-gray-300 text-gray-700 hover:border-red-600'
-                                    }`}
+                                    className={`px-4 py-2 rounded font-semibold whitespace-nowrap ${typeFilter === f.id
+                                        ? 'bg-red-600 text-white'
+                                        : 'bg-white border border-gray-300 text-gray-700 hover:border-red-600'
+                                        }`}
                                 >
                                     {f.label}
                                 </button>
@@ -155,11 +170,10 @@ const OrdersPage = () => {
                                     <button
                                         key={f.id}
                                         onClick={() => setStatusFilter(f.id)}
-                                        className={`px-4 py-2 rounded font-semibold whitespace-nowrap ${
-                                            statusFilter === f.id
-                                                ? 'bg-red-600 text-white'
-                                                : 'bg-white border border-gray-300 text-gray-700 hover:border-red-600'
-                                        }`}
+                                        className={`px-4 py-2 rounded font-semibold whitespace-nowrap ${statusFilter === f.id
+                                            ? 'bg-red-600 text-white'
+                                            : 'bg-white border border-gray-300 text-gray-700 hover:border-red-600'
+                                            }`}
                                     >
                                         {f.label}
                                     </button>
@@ -263,11 +277,12 @@ const OrdersPage = () => {
 
             {/* Modal chi tiết hóa đơn */}
             {detailBill && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setDetailBill(null)}>
-                    <div
-                        className="bg-white rounded-lg border-t-4 border-red-600 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6"
-                        onClick={e => e.stopPropagation()}
-                    >
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                    onMouseDown={handleBackdropMouseDown}
+                    onMouseUp={handleBackdropMouseUp}
+                >
+                    <div className="bg-white rounded-lg border-t-4 border-red-600 w-full max-w-lg max-h-[90vh] overflow-y-auto p-6">
                         <div className="flex justify-between items-center mb-4">
                             <h3 className="text-xl font-bold text-red-600">
                                 Chi tiết đơn hàng {detailBill.bill_id || detailBill.order_id}

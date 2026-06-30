@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import laravel from 'laravel-vite-plugin';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -25,42 +25,61 @@ function copyManifestPlugin() {
     };
 }
 
-export default defineConfig({
-    resolve: {
-        alias: {
-            '@': path.resolve(__dirname, './src'),
+export default defineConfig(({ mode }) => {
+    // Tải biến env theo mode (development / production)
+    const env = loadEnv(mode, process.cwd(), '');
+
+    const isNgrok = env.VITE_MODE === 'ngrok';
+    const isCloudflared = env.VITE_MODE === 'cloudflared';
+    const isTunnel = isNgrok || isCloudflared;
+
+    // Lấy URL tương ứng với mode
+    let tunnelUrl = '';
+    if (isNgrok) tunnelUrl = env.VITE_NGROK_URL || '';
+    if (isCloudflared) tunnelUrl = env.VITE_CLOUDFLARED_URL || '';
+
+    console.log(`>>> Vite mode: ${env.VITE_MODE || 'localhost'} | API: ${env.VITE_API_URL}`);
+
+    return {
+        resolve: {
+            alias: {
+                '@': path.resolve(__dirname, './src'),
+            },
         },
-    },
-    plugins: [
-        laravel({
-            input: ['src/app.jsx'],
-            publicDirectory: '../backend/public',
-            buildDirectory: 'build',
-            refresh: true,
-        }),
-        react(),
-        tailwindcss(),
-        copyManifestPlugin(),
-    ],
-    server: {
-        host: '0.0.0.0',
-        port: 5173,
-        https: {
-            key: fs.readFileSync(path.resolve(__dirname, 'certs/localhost+2-key.pem')),
-            cert: fs.readFileSync(path.resolve(__dirname, 'certs/localhost+2.pem'))
+        plugins: [
+            laravel({
+                input: ['src/app.jsx'],
+                publicDirectory: '../backend/public',
+                buildDirectory: 'build',
+                refresh: true,
+            }),
+            react(),
+            tailwindcss(),
+            copyManifestPlugin(),
+        ],
+        server: {
+            host: '0.0.0.0',
+            port: 5173,
+            https: {
+                key: fs.readFileSync(path.resolve(__dirname, 'certs/localhost+2-key.pem')),
+                cert: fs.readFileSync(path.resolve(__dirname, 'certs/localhost+2.pem')),
+            },
+            cors: true,
+            // Origin LUÔN là localhost:5173 để Laravel @vite gọi đúng chỗ
+            origin: 'https://localhost:5173',
+            allowedHosts: isTunnel
+                ? [new URL(tunnelUrl).hostname, 'localhost', '127.0.0.1']
+                : ['localhost', '127.0.0.1'],
+            hmr: {
+                host: 'localhost',
+                protocol: 'wss',
+                clientPort: 5173,
+            },
         },
-        cors: true,
-        origin: 'https://magnetism-obsessive-emit.ngrok-free.dev',
-        allowedHosts: ['magnetism-obsessive-emit.ngrok-free.dev'],
-        hmr: {
-            host: 'magnetism-obsessive-emit.ngrok-free.dev',
-            protocol: 'wss',
-            clientPort: 443,
+        build: {
+            outDir: '../backend/public/build',
+            manifest: true,
+            emptyOutDir: true,
         },
-    },
-    build: {
-        outDir: '../backend/public/build',
-        manifest: true,
-        emptyOutDir: true,
-    },
+    };
 });

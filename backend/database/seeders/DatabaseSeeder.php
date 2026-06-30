@@ -87,20 +87,89 @@ class DatabaseSeeder extends Seeder
                 'username' => 'admin',
                 'email' => 'admin@gmail.com',
                 'password_hash' => Hash::make('admin'),
-                'tele_number' => '0907106674',
+                'tele_number' => '0123456789',
                 'role' => 'admin',
+                'points' => 0,
                 'membership' => 'administrator',
                 'created_at' => now(),
             ],
+
             [
                 'username' => 'user1',
                 'email' => 'user1@gmail.com',
                 'password_hash' => Hash::make('password'),
-                'tele_number' => '0123456789',
+                'tele_number' => '0223456789',
                 'role' => 'user',
+                'points' => 0,
                 'membership' => 'bronze',
                 'created_at' => now(),
-            ]
+            ],
+
+            [
+                'username' => 'user2',
+                'email' => 'user2@gmail.com',
+                'password_hash' => Hash::make('password'),
+                'tele_number' => '0323456789',
+                'role' => 'user',
+                'points' => 0,
+                'membership' => 'bronze',
+                'created_at' => now(),
+            ],
+
+            [
+                'username' => 'Bronze',
+                'email' => 'Bronze@gmail.com',
+                'password_hash' => Hash::make('password'),
+                'tele_number' => '0423456789',
+                'role' => 'user',
+                'points' => 990,
+                'membership' => 'bronze',
+                'created_at' => now(),
+            ],
+
+            [
+                'username' => 'Silver',
+                'email' => 'Silver@gmail.com',
+                'password_hash' => Hash::make('password'),
+                'tele_number' => '0523456789',
+                'role' => 'user',
+                'points' => 2990,
+                'membership' => 'silver',
+                'created_at' => now(),
+            ],
+
+            [
+                'username' => 'Gold',
+                'email' => 'Gold@gmail.com',
+                'password_hash' => Hash::make('password'),
+                'tele_number' => '0623456789',
+                'role' => 'user',
+                'points' => 5990,
+                'membership' => 'gold',
+                'created_at' => now(),
+            ],
+
+            [
+                'username' => 'Platinum',
+                'email' => 'Platinum@gmail.com',
+                'password_hash' => Hash::make('password'),
+                'tele_number' => '0723456789',
+                'role' => 'user',
+                'points' => 9990,
+                'membership' => 'platinum',
+                'created_at' => now(),
+            ],
+
+            [
+                'username' => 'Diamond',
+                'email' => 'Diamond@gmail.com',
+                'password_hash' => Hash::make('password'),
+                'tele_number' => '0823456789',
+                'role' => 'user',           
+                'points' => 999999999,
+                'membership' => 'diamond',
+                'created_at' => now(),
+            ],
         ]);
 
         // 4. Seed Table

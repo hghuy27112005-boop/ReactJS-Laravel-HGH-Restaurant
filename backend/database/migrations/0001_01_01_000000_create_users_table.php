@@ -18,6 +18,7 @@ return new class extends Migration {
             $table->string('tele_number', 20)->unique()->nullable();
             $table->text('avatar_url')->nullable();
             $table->enum('role', ['admin', 'staff', 'user'])->default('user');
+            $table->integer('points')->default(0);
             $table->enum('membership', ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'administrator'])->default('bronze');
             $table->string('provider', 20)->nullable();
             $table->string('provider_id', 100)->nullable();
