@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Bill;
+use App\Models\Order;
 use App\Models\Points;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,25 +14,45 @@ class VnpayController extends Controller
     public function createPaymentUrl(Request $request)
     {
         $request->validate([
-            'bill_id' => 'required',
+            'order_id' => 'required|exists:orders,order_id',
         ]);
 
-        $billId = $request->input('bill_id');
+        $orderId = $request->input('order_id');
 
-        // QUAN TRỌNG: Số tiền thanh toán PHẢI lấy từ DB (bill->total_price đã
-        // được server tính đúng lúc tạo bill), KHÔNG tin giá trị "amount" mà
-        // client gửi lên — nếu không, người dùng có thể sửa request để thanh
-        // toán với số tiền tuỳ ý trong khi đơn hàng thật có giá trị khác.
-        $bill = Bill::where('bill_id', $billId)->first();
+        // Lấy order để xác nhận có tồn tại và lấy subtotal_price
+        $order = Order::with('user')->where('order_id', $orderId)->first();
 
-        if (!$bill) {
-            return response()->json(['message' => 'Bill not found'], 404);
+        if (!$order) {
+            return response()->json(['message' => 'Order not found'], 404);
         }
 
+        // Kiểm tra xem order đã có bill chưa (tránh thanh toán 2 lần)
+        $existingBill = Bill::where('order_id', $orderId)->first();
+        if ($existingBill && $existingBill->payment_method !== null && $existingBill->payment_method !== 'unpaid') {
+            return response()->json(['message' => 'Order already paid'], 400);
+        }
+
+        // Tạo Bill mới nếu chưa có — trigger fn_apply_administrator_free_bill chạy ở đây
+        if (!$existingBill) {
+            $date     = date('dmy');
+            $sequence = Bill::whereDate('created_at', today())->count() + 1;
+            $billId   = $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+
+            $existingBill = Bill::create([
+                'bill_id'        => $billId,
+                'order_id'       => $orderId,
+                'user_id'        => $order->user_id,
+                'total_price'    => $order->subtotal_price, // trigger sẽ ghi đè nếu là admin
+                'payment_method' => null,
+            ]);
+        }
+
+        $bill   = $existingBill->fresh(); // lấy giá trị sau trigger
+        $billId = $bill->bill_id;
         $amount = (int) round((float) $bill->total_price);
 
         if ($amount < 1000) {
-            return response()->json(['message' => 'Invalid bill amount'], 422);
+            return response()->json(['message' => 'Invalid bill amount (amount < 1000 VND, may be administrator free bill)'], 422);
         }
 
         $vnp_TmnCode    = config('vnpay.tmn_code');
@@ -43,12 +64,9 @@ class VnpayController extends Controller
         $vnp_Amount     = $amount * 100;
         $vnp_CreateDate = now()->format('YmdHis');
         $vnp_ExpireDate = now()->addMinutes(15)->format('YmdHis');
-        $vnp_OrderInfo  = 'Thanh toan don hang ' . $billId;
+        $vnp_OrderInfo  = 'Thanh toan don hang ' . $orderId;
 
-        // Lấy IP khách hàng — theo đúng code mẫu chính thức của VNPAY (chỉ lấy
-        // REMOTE_ADDR thẳng, không phân biệt IPv4/IPv6). Ưu tiên X-Forwarded-For
-        // vì app chạy qua ngrok/proxy, REMOTE_ADDR lúc đó sẽ là IP của proxy
-        // chứ không phải IP khách hàng thật.
+        // Lấy IP khách hàng
         $rawIp = $request->header('X-Forwarded-For') ?? $request->ip();
         $ip    = trim(explode(',', $rawIp)[0]);
 
@@ -68,13 +86,11 @@ class VnpayController extends Controller
             "vnp_TxnRef"     => $vnp_TxnRef,
         ];
 
-        // Thêm BankCode nếu có (tuỳ chọn)
         $bankCode = $request->input('bankCode');
         if (!empty($bankCode)) {
             $inputData['vnp_BankCode'] = $bankCode;
         }
 
-        // ---- Build hashData & query theo đúng chuẩn code mẫu VNPAY ----
         ksort($inputData);
 
         $i        = 0;
@@ -92,19 +108,20 @@ class VnpayController extends Controller
                 $query .= urlencode($key) . "=" . urlencode($value) . '&';
             }
         }
-        // ----------------------------------------------------------------
 
         $vnpSecureHash = hash_hmac('sha512', $hashData, $vnp_HashSecret);
         $paymentUrl    = $vnp_Url . "?" . $query . 'vnp_SecureHash=' . $vnpSecureHash;
 
         Log::info('VNPay createPaymentUrl', [
+            'order_id'    => $orderId,
+            'bill_id'     => $billId,
             'input_data'  => $inputData,
-            'hash_data'   => $hashData,
             'secure_hash' => $vnpSecureHash,
             'payment_url' => $paymentUrl,
         ]);
 
-        Bill::where('bill_id', $billId)->update(['vnp_txn_ref' => $vnp_TxnRef]);
+        $bill->vnp_txn_ref = $vnp_TxnRef;
+        $bill->save();
 
         return response()->json(['payment_url' => $paymentUrl]);
     }
@@ -184,8 +201,9 @@ class VnpayController extends Controller
 
         $vnpAmount = ($result['data']['vnp_Amount'] ?? 0) / 100;
 
-        // So sánh tiền tệ: dùng sai số cho phép thay vì so sánh float tuyệt đối
-        if (abs((float) $bill->total_price - (float) $vnpAmount) > 0.01) {
+        // So sánh tiền tệ: dùng sai số cho phép thay vì so sánh float tuyệt đối. 
+        // Nếu vnpAmount < total_price, có thể khách đã áp mã giảm giá VNPay -> chấp nhận và cập nhật lại bill
+        if ((float) $vnpAmount > (float) $bill->total_price + 0.01) {
             Log::warning('VNPay IPN amount mismatch', [
                 'bill_id'     => $billId,
                 'bill_amount' => $bill->total_price,
@@ -236,8 +254,13 @@ class VnpayController extends Controller
             return false;
         }
 
-        if (abs((float) $bill->total_price - (float) $vnpAmount) > 0.01) {
+        if ((float) $vnpAmount > (float) $bill->total_price + 0.01) {
             return false;
+        }
+
+        // Cập nhật lại total_price nếu có giảm giá từ VNPay
+        if (abs((float) $bill->total_price - (float) $vnpAmount) > 0.01) {
+            $bill->total_price = $vnpAmount;
         }
 
         [$record, $paidField, $statusField, $nextStatus] = $this->resolveOrderRecord($bill->order);
@@ -339,10 +362,15 @@ class VnpayController extends Controller
             return null;
         }
 
-        $parts  = explode('_', $vnpTxnRef);
-        $billId = $parts[0] ?? null;
+        // Format: "{billId}_{timestamp}" — billId là string alphanumeric (dmy + seq)
+        $lastUnderscore = strrpos($vnpTxnRef, '_');
+        if ($lastUnderscore === false) {
+            return null;
+        }
 
-        if (!$billId || !is_numeric($billId)) {
+        $billId = substr($vnpTxnRef, 0, $lastUnderscore);
+
+        if (empty($billId)) {
             return null;
         }
 
@@ -362,8 +390,9 @@ class VnpayController extends Controller
      */
     private function awardPointsAndStats(Bill $bill, $order): void
     {
-        $amount = (float) $bill->total_price;
-        $user   = $order->user; // Order::user() — xem App\Models\Order
+        $amountPaid = (float) $bill->total_price;      
+        $originalAmount = (float) $order->subtotal_price;
+        $user = $order->user;
 
         if (!$user) {
             Log::warning('VNPay IPN: order has no user, skip points/statistics', [
@@ -372,10 +401,10 @@ class VnpayController extends Controller
             return;
         }
 
-        $basePoints = floor($amount / 1000);
+        $basePoints = floor($amountPaid / 1000);
         $bonusPoints = 0;
         
-        if ($amount >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {
+        if ($originalAmount >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {
             $bonusMap = [
                 'bronze' => 10,
                 'silver' => 20,
@@ -395,13 +424,13 @@ class VnpayController extends Controller
             'user_id'              => $user->user_id,
             'bill_id'              => $bill->bill_id,
             'points_earned'        => $pointsEarned,
-            'booking_total_price'  => $order->order_type === 'booking_table' ? $amount : 0,
-            'delivery_total_price' => $order->order_type === 'delivery' ? $amount : 0,
+            'booking_total_price'  => $order->order_type === 'booking_table' ? $amountPaid : 0,
+            'delivery_total_price' => $order->order_type === 'delivery' ? $amountPaid : 0,
         ]);
 
         $stats = $user->getOrCreateStatistics();
         $stats->incrementTotalOrders();
-        $stats->addSpent($amount);
+        $stats->addSpent($amountPaid);
         $stats->addPoints($pointsEarned);
 
         if ($order->order_type === 'booking_table') {

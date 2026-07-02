@@ -9,9 +9,130 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Bill;
 use App\Models\BookingTable;
+use App\Models\Dish;
+use App\Models\Delivery;
 
 class OrderController extends Controller
 {
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'order_type' => 'required|in:booking_table,delivery',
+            'items' => 'required|array|min:1',
+            'items.*.dish_id' => 'required|exists:dishes,dish_id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'delivery.address' => 'required_if:order_type,delivery|string',
+            'delivery.phone' => 'required_if:order_type,delivery|string',
+            'booking_table' => 'required_if:order_type,booking_table|array',
+            'booking_table.tables' => 'required_if:order_type,booking_table|array',
+            'booking_table.start_date' => 'required_if:order_type,booking_table|date',
+            'booking_table.start_time' => 'required_if:order_type,booking_table|string',
+            'booking_table.end_time' => 'required_if:order_type,booking_table|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $dishIds = collect($validated['items'])->pluck('dish_id')->unique();
+            $dishes  = Dish::whereIn('dish_id', $dishIds)->get()->keyBy('dish_id');
+
+            $subtotalBeforePoints = 0;
+            $itemsWithRealPrice = [];
+
+            foreach ($validated['items'] as $item) {
+                $dish = $dishes->get($item['dish_id']);
+
+                if (!$dish) {
+                    DB::rollBack();
+                    return response()->json([
+                        'message' => "Món ăn không tồn tại (dish_id: {$item['dish_id']})",
+                    ], 422);
+                }
+
+                $realPrice = (float) $dish->price;
+                $subtotalBeforePoints += $realPrice * $item['quantity'];
+
+                $itemsWithRealPrice[] = [
+                    'dish_id'  => $item['dish_id'],
+                    'quantity' => $item['quantity'],
+                    'price'    => $realPrice,
+                ];
+            }
+            
+            $totalAmount = round($subtotalBeforePoints, 2);
+
+            $date = date('dmy');
+            $sequence = Order::whereDate('created_at', today())->count() + 1;
+            $orderId = $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+
+            $order = Order::create([
+                'order_id' => $orderId,
+                'user_id' => $request->user()->user_id,
+                'order_type' => $validated['order_type'],
+                'subtotal_price' => $subtotalBeforePoints,
+                'created_at' => now(),
+            ]);
+
+            foreach ($itemsWithRealPrice as $item) {
+                \App\Models\OrderItem::create([
+                    'order_id' => $orderId,
+                    'dish_id' => $item['dish_id'],
+                    'quantity' => $item['quantity'],
+                    'unit_price' => $item['price'],
+                ]);
+            }
+
+            if ($validated['order_type'] === 'delivery') {
+                $delSequence = Delivery::whereDate('created_at', today())->count() + 1;
+                $deliveryId = $date . str_pad($delSequence, 4, '0', STR_PAD_LEFT);
+
+                \App\Models\Delivery::create([
+                    'delivery_id' => $deliveryId,
+                    'order_id' => $orderId,
+                    'address' => $validated['delivery']['address'],
+                    'D_payment_status' => 'unpaid',
+                    'delivery_status' => 'waiting_confirmation',
+                ]);
+            }
+
+            if ($validated['order_type'] === 'booking_table') {
+                $startTime = $validated['booking_table']['start_time']; 
+                $endTime   = $validated['booking_table']['end_time'];   
+
+                $baseCount = BookingTable::whereDate('created_at', today())->count();
+                $tableIndex = 0;
+
+                foreach ($validated['booking_table']['tables'] as $tableNumber) {
+                    $seq  = str_pad($baseCount + $tableIndex + 1, 4, '0', STR_PAD_LEFT);
+                    $bookingId = $date . $seq;
+                    $tableIndex++;
+
+                    BookingTable::create([
+                        'booking_id'       => $bookingId,
+                        'order_id'         => $orderId,
+                        'table_number'     => $tableNumber,
+                        'booking_date'     => $validated['booking_table']['start_date'],
+                        'start_time'       => $startTime,
+                        'end_time'         => $endTime,
+                        'B_payment_status' => 'unpaid',
+                        'booking_status'   => 'waiting_info',
+                    ]);
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'data' => [
+                    'order_id'               => $orderId,
+                    'subtotal'               => $subtotalBeforePoints,
+                ],
+                'message' => 'Order created successfully',
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
     /**
      * Add dish to session cart
      */
@@ -277,7 +398,8 @@ class OrderController extends Controller
                 'bill_id'        => $bill->bill_id,
                 'order_id'       => $order->order_id,
                 'order_type'     => $order->order_type,
-                'total_price'    => $bill->total_price,
+                'subtotal_price' => $order->subtotal_price,   // giá gốc trước khi giảm giá
+                'total_price'    => $bill->total_price,        // giá thực trả (sau giảm giá VNPay hoặc 0 nếu điểm)
                 'payment_method' => $bill->payment_method,
                 'is_paid'        => $bill->payment_method !== 'unpaid',
                 'status'         => $bill->payment_method !== 'unpaid' ? 'paid' : 'unpaid',

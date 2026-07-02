@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { bookingService, billService, vnpayService, extractListData, userAPI } from '../../services/api';
+import { bookingService, billService, vnpayService, extractListData, userAPI, orderService } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState, Modal } from '../../components/Shared';
 import { useAuthContext } from '../../context/AuthContext';
 
@@ -19,6 +19,7 @@ const BookingsPage = () => {
 
     // Payment locking: null | 'vnpay' | 'points'
     const [payingWith, setPayingWith] = useState(null);
+    const [createdOrderId, setCreatedOrderId] = useState(null);
 
     // Points Payment states
     const { user, fetchUser } = useAuthContext();
@@ -72,6 +73,7 @@ const BookingsPage = () => {
                     if (session.totalTables) setTotalTables(session.totalTables);
                     if (session.tableTypes) setTableTypes(session.tableTypes);
                     if (session.selectedTables) setSelectedTables(session.selectedTables);
+                    if (session.orderId) setCreatedOrderId(session.orderId);
                 }
             } catch (e) {
                 sessionStorage.removeItem(BOOKING_SESSION_KEY);
@@ -141,18 +143,40 @@ const BookingsPage = () => {
             }
             setWizardStep(5);
         } else if (wizardStep === 5) {
-            // Lưu toàn bộ trạng thái vào sessionStorage để khóa
-            saveCheckoutSession('payment', {
-                bookingDate,
-                startH,
-                startM,
-                endH,
-                endM,
-                totalTables,
-                tableTypes,
-                selectedTables,
-            });
-            setCheckoutStage('payment');
+            try {
+                const orderData = {
+                    order_type: 'booking_table',
+                    booking_table: {
+                        tables: selectedTables,
+                        start_date: bookingDate,
+                        start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
+                        end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
+                    },
+                    items: bookingCart.map(item => ({
+                        dish_id: item.dish_id,
+                        quantity: item.quantity,
+                    })),
+                };
+                const orderRes = await orderService.storeOrder(orderData);
+                const orderId = orderRes.data.data.order_id;
+                setCreatedOrderId(orderId);
+
+                // Lưu toàn bộ trạng thái vào sessionStorage để khóa
+                saveCheckoutSession('payment', {
+                    bookingDate,
+                    startH,
+                    startM,
+                    endH,
+                    endM,
+                    totalTables,
+                    tableTypes,
+                    selectedTables,
+                    orderId,
+                });
+                setCheckoutStage('payment');
+            } catch (err) {
+                setError(err.response?.data?.message || 'Lỗi tạo đơn hàng');
+            }
         }
     };
 
@@ -220,27 +244,9 @@ const BookingsPage = () => {
         setPayingWith('vnpay');
 
         try {
-            const orderData = {
-                order_type: 'booking_table',
-                booking_table: {
-                    tables: selectedTables,
-                    start_date: bookingDate,
-                    start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
-                    end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
-                },
-                items: bookingCart.map(item => ({
-                    dish_id: item.dish_id,
-                    quantity: item.quantity,
-                })),
-            };
-
-            // 1. Tạo bill trước
-            const response = await billService.storeBill(orderData);
-            const billId = response.data.data.bill_id;
-
             // 2. Lấy URL thanh toán VNPay
             const vnpayRes = await vnpayService.createPaymentUrl({
-                bill_id: billId,
+                order_id: createdOrderId,
                 amount: cartTotal,
                 order_type: 'booking_table',
             });
@@ -265,7 +271,7 @@ const BookingsPage = () => {
 
             const needed = Math.floor(cartTotal / 100);
             setPointsNeeded(needed);
-            
+
             if (freshPoints < needed) {
                 setPointsModalType('insufficient');
             } else {
@@ -280,26 +286,9 @@ const BookingsPage = () => {
         if (payingWith) return; // chặn double-click
         setPayingWith('points');
         try {
-            const orderData = {
-                order_type: 'booking_table',
-                booking_table: {
-                    tables: selectedTables,
-                    start_date: bookingDate,
-                    start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
-                    end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
-                },
-                items: bookingCart.map(item => ({
-                    dish_id: item.dish_id,
-                    quantity: item.quantity,
-                })),
-            };
-
-            // 1. Tạo bill trước
-            const billRes = await billService.storeBill(orderData);
-            const billId = billRes.data.data.bill_id;
-
             // 2. Thanh toán bằng điểm
-            await billService.payWithPoints(billId);
+            const res = await orderService.payWithPoints(createdOrderId);
+            const billId = res.data.data.bill_id;
 
             // 3. Xóa cart, session và redirect
             localStorage.removeItem('booking_cart');
@@ -662,13 +651,12 @@ const BookingsPage = () => {
                                         <button
                                             onClick={handlePayment}
                                             disabled={!!payingWith}
-                                            className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 mb-3 ${
-                                                payingWith === 'vnpay'
-                                                    ? 'bg-blue-600 text-white cursor-not-allowed'
-                                                    : payingWith === 'points'
+                                            className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 mb-3 ${payingWith === 'vnpay'
+                                                ? 'bg-blue-600 text-white cursor-not-allowed'
+                                                : payingWith === 'points'
                                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                                     : 'bg-blue-600 text-white hover:bg-blue-700'
-                                            }`}
+                                                }`}
                                         >
                                             {payingWith === 'vnpay' ? (
                                                 <><i className="fas fa-spinner fa-spin"></i> Đang xử lý...</>
@@ -680,13 +668,12 @@ const BookingsPage = () => {
                                         <button
                                             onClick={handlePointsPaymentClick}
                                             disabled={!!payingWith}
-                                            className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 ${
-                                                payingWith === 'points'
-                                                    ? 'bg-green-600 text-white cursor-not-allowed'
-                                                    : payingWith === 'vnpay'
+                                            className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 ${payingWith === 'points'
+                                                ? 'bg-green-600 text-white cursor-not-allowed'
+                                                : payingWith === 'vnpay'
                                                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                                     : 'bg-green-600 text-white hover:bg-green-700'
-                                            }`}
+                                                }`}
                                         >
                                             {payingWith === 'points' ? (
                                                 <><i className="fas fa-spinner fa-spin"></i> Đang xử lý...</>
@@ -712,7 +699,7 @@ const BookingsPage = () => {
                 {pointsModalType === 'insufficient' && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
                         <div className="bg-white rounded-lg w-full max-w-md p-6 relative">
-                            <button 
+                            <button
                                 onClick={() => setPointsModalType(null)}
                                 className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
                             >
@@ -720,10 +707,10 @@ const BookingsPage = () => {
                             </button>
                             <h3 className="text-xl font-bold text-red-600 mb-4 text-center">Không đủ điểm</h3>
                             <p className="text-gray-700 text-center mb-6">
-                                Bạn không có đủ điểm để thanh toán hóa đơn này. <br/>
+                                Bạn không có đủ điểm để thanh toán hóa đơn này. <br />
                                 Hiện bạn đang có <strong className="text-red-600">{currentPoints}</strong> điểm.
                             </p>
-                            <button 
+                            <button
                                 onClick={() => setPointsModalType(null)}
                                 className="w-full bg-red-600 text-white font-bold py-2 rounded hover:bg-red-700"
                             >
@@ -737,7 +724,7 @@ const BookingsPage = () => {
                 {pointsModalType === 'confirm' && (
                     <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
                         <div className="bg-white rounded-lg w-full max-w-md p-6 relative">
-                            <button 
+                            <button
                                 onClick={() => setPointsModalType(null)}
                                 className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
                             >
@@ -745,7 +732,7 @@ const BookingsPage = () => {
                             </button>
                             <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">Xác nhận thanh toán</h3>
                             <p className="text-gray-700 text-center mb-4">
-                                Bạn có chắc muốn dùng điểm để thanh toán hóa đơn này? <br/>
+                                Bạn có chắc muốn dùng điểm để thanh toán hóa đơn này? <br />
                                 Hiện bạn đang có <strong className="text-red-600">{currentPoints}</strong> điểm.
                             </p>
                             {checkMembershipDowngrade() && (
@@ -754,13 +741,13 @@ const BookingsPage = () => {
                                 </p>
                             )}
                             <div className="flex gap-4">
-                                <button 
+                                <button
                                     onClick={() => setPointsModalType(null)}
                                     className="flex-1 bg-gray-200 text-gray-800 font-bold py-2 rounded hover:bg-gray-300"
                                 >
                                     Hủy
                                 </button>
-                                <button 
+                                <button
                                     onClick={handleConfirmPointsPayment}
                                     className="flex-1 bg-red-600 text-white font-bold py-2 rounded hover:bg-red-700"
                                 >
@@ -784,7 +771,7 @@ const BookingsPage = () => {
                         {formatted.map((bill, idx) => {
                             const booking = bill.booking_table;
                             return (
-                                <Card key={bill.bill_id || idx} title={`Đơn hàng ${bill.bill_id || bill.order_id || ''}`}>
+                                <Card key={bill.bill_id || idx} title={`Đơn hàng ${bill.order_id || bill.bill_id || ''}`}>
                                     <div className="grid md:grid-cols-4 gap-4 mb-4">
                                         <div>
                                             <p className="text-sm text-gray-600">Bàn</p>
@@ -807,10 +794,44 @@ const BookingsPage = () => {
                                             </p>
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-600">Tổng tiền</p>
-                                            <p className="font-bold text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</p>
+                                            <p className="text-sm text-gray-600">Phương thức thanh toán</p>
+                                            <p className="font-bold text-red-600">
+                                                {bill.payment_method === 'Points' ? 'Điểm' : bill.payment_method === 'vnpay' ? 'VNPay' : (bill.payment_method || '—')}
+                                            </p>
                                         </div>
                                     </div>
+
+                                    {/* Chi tiết thanh toán */}
+                                    {bill.subtotal_price != null && (
+                                        <div className="mt-2 text-sm space-y-1">
+                                            <div className="flex justify-between text-gray-600">
+                                                <span>Tổng tiền:</span>
+                                                <span className="font-semibold">{Number(bill.subtotal_price).toLocaleString('vi-VN')}đ</span>
+                                            </div>
+                                            {bill.payment_method === 'Points' ? (
+                                                <>
+                                                    <div className="flex justify-between text-green-700">
+                                                        <span>Đã thanh toán bằng điểm</span>
+                                                        <span className="font-semibold">-{Number(bill.subtotal_price).toLocaleString('vi-VN')}đ</span>
+                                                    </div>
+                                                    <div className="flex justify-between font-bold text-gray-800">
+                                                        <span>Số tiền đã trả:</span>
+                                                        <span className="text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</span>
+                                                    </div>
+                                                </>
+                                            ) : bill.payment_method === 'vnpay' ? (
+                                                <div className="flex justify-between font-bold text-gray-800">
+                                                    <span>Số tiền đã trả:</span>
+                                                    <span className="text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-between font-bold text-gray-800">
+                                                    <span>Số tiền cần trả:</span>
+                                                    <span className="text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
                                     <div className="mt-4">
                                         <Badge variant={bill.status === 'paid' ? 'success' : 'warning'}>

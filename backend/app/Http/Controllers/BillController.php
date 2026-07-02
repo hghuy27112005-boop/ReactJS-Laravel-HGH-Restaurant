@@ -453,6 +453,149 @@ class BillController extends Controller
     }
 
     /**
+     * Pay with Points — nhận order_id, tạo Bill nếu chưa có, rồi thanh toán bằng điểm.
+     * Trigger fn_apply_administrator_free_bill sẽ chạy khi INSERT vào bills.
+     */
+    public function payWithPointsByOrder(Request $request, Order $order)
+    {
+        $user = $request->user();
+
+        if ($order->user_id !== $user->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        // Kiểm tra xem order đã có bill và đã thanh toán chưa
+        $bill = Bill::with(['order.delivery', 'order.bookings'])
+            ->where('order_id', $order->order_id)
+            ->first();
+
+        if ($bill) {
+            $isPaid = false;
+            if ($order->order_type === 'delivery' && $bill->delivery) {
+                $isPaid = $bill->delivery->D_payment_status === 'paid';
+            } elseif ($order->order_type === 'booking_table' && $bill->bookingTable && $bill->bookingTable->isNotEmpty()) {
+                $isPaid = $bill->bookingTable->first()->B_payment_status === 'paid';
+            }
+
+            if ($isPaid) {
+                return response()->json(['message' => 'Đơn hàng đã được thanh toán'], 400);
+            }
+        }
+
+        // Tạo Bill nếu chưa có — trigger sẽ set total_price = 0 nếu là admin
+        if (!$bill) {
+            $date     = date('dmy');
+            $sequence = Bill::whereDate('created_at', today())->count() + 1;
+            $billId   = $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+
+            $bill = Bill::create([
+                'bill_id'        => $billId,
+                'order_id'       => $order->order_id,
+                'user_id'        => $user->user_id,
+                'total_price'    => $order->subtotal_price, // trigger ghi đè nếu admin
+                'payment_method' => null,
+            ]);
+            $bill = $bill->fresh(); // lấy giá trị sau trigger
+        }
+
+        // Số tiền cần thanh toán (0 nếu admin đã được miễn phí bởi trigger)
+        $amount         = (float) $bill->total_price;
+        $requiredPoints = (int) floor($amount / 100);
+
+        if ($requiredPoints > 0 && $user->points < $requiredPoints) {
+            return response()->json([
+                'message'  => 'Bạn không có đủ điểm để thanh toán hóa đơn này.',
+                'required' => $requiredPoints,
+                'current'  => $user->points,
+            ], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            $originalAmount = (float) $order->subtotal_price;
+            $bonusPoints = 0;
+
+            if ($originalAmount >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {
+                $bonusMap = [
+                    'bronze' => 10,
+                    'silver' => 20,
+                    'gold' => 30,
+                    'platinum' => 40,
+                    'diamond' => 50,
+                ];
+                $bonusPoints = $bonusMap[$user->membership] ?? 0;
+            }
+
+            $pointsEarned = $bonusPoints; // base points = 0 vì thanh toán bằng điểm
+
+            if ($requiredPoints > 0 || $pointsEarned > 0) {
+                $user->points = $user->points - $requiredPoints + $pointsEarned;
+                $user->updateMembership();
+                $user->save();
+            }
+
+            $bill->payment_method = 'Points';
+            $bill->total_price    = 0;
+            $bill->save();
+
+            $order->load(['delivery', 'bookings']);
+
+            if ($order->order_type === 'delivery' && $order->delivery !== null) {
+                $order->delivery->update([
+                    'D_payment_status' => 'paid',
+                    'delivery_status'  => 'waiting_approval',
+                    'approved_at'      => now(),
+                ]);
+            }
+
+            if ($order->order_type === 'booking_table') {
+                $bookingTables = BookingTable::where('order_id', $order->order_id)->get();
+                foreach ($bookingTables as $bt) {
+                    $bt->update([
+                        'B_payment_status' => 'paid',
+                        'booking_status'   => 'waiting_confirmation',
+                    ]);
+                }
+            }
+
+            // Ghi lại lịch sử Points
+            Points::create([
+                'user_id'              => $user->user_id,
+                'bill_id'              => $bill->bill_id,
+                'points_earned'        => $pointsEarned,
+                'points_redeemed'      => $requiredPoints,
+                'booking_total_price'  => 0,
+                'delivery_total_price' => 0,
+            ]);
+
+            // Cập nhật thống kê
+            $stats = $user->getOrCreateStatistics();
+            $stats->incrementTotalOrders();
+            if ($order->order_type === 'booking_table') {
+                $stats->increment('booking_orders');
+            } else {
+                $stats->increment('delivery_orders');
+            }
+            $stats->save();
+
+            DB::commit();
+
+            return response()->json([
+                'data' => [
+                    'bill_id'          => $bill->bill_id,
+                    'payment_status'   => 'completed',
+                    'points_used'      => $requiredPoints,
+                    'remaining_points' => $user->points,
+                ],
+                'message' => 'Thanh toán bằng điểm thành công',
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Pay with Points
      */
     public function payWithPoints(Request $request, Bill $bill)
@@ -492,6 +635,7 @@ class BillController extends Controller
 
             $bill->update([
                 'payment_method' => 'Points',
+                'total_price'    => 0,
             ]);
 
             $order = $bill->order;
@@ -522,9 +666,19 @@ class BillController extends Controller
                 'bill_id'              => $bill->bill_id,
                 'points_earned'        => 0,
                 'points_redeemed'      => $requiredPoints,
-                'booking_total_price'  => $order->order_type === 'booking_table' ? $amount : 0,
-                'delivery_total_price' => $order->order_type === 'delivery' ? $amount : 0,
+                'booking_total_price'  => 0,
+                'delivery_total_price' => 0,
             ]);
+
+            // Cập nhật thống kê cho đơn hàng thanh toán bằng điểm (không tăng doanh thu)
+            $stats = $user->getOrCreateStatistics();
+            $stats->incrementTotalOrders();
+            if ($order->order_type === 'booking_table') {
+                $stats->increment('booking_orders');
+            } else {
+                $stats->increment('delivery_orders');
+            }
+            $stats->save();
 
             DB::commit();
 

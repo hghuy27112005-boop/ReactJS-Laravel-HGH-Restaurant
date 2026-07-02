@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { adminAPI, dishAPI } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge } from '../../components/Shared';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'https://magnetism-obsessive-emit.ngrok-free.dev';
+const API_BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : 'http://localhost:8000';
 
 // Xây dựng URL hình ảnh đúng theo backend/public/dishes
 // - Nếu image_url là URL đầy đủ (http/https) -> giữ nguyên

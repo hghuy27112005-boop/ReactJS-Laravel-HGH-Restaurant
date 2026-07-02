@@ -221,7 +221,7 @@ const OrdersPage = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600">Tổng tiền</p>
-                                                    <p className="font-bold text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</p>
+                                                    <p className="font-bold text-red-600">{Number(bill.subtotal_price || bill.total_price || 0).toLocaleString('vi-VN')}đ</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600 mb-1">Trạng thái</p>
@@ -242,7 +242,7 @@ const OrdersPage = () => {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600">Tổng tiền</p>
-                                                    <p className="font-bold text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</p>
+                                                    <p className="font-bold text-red-600">{Number(bill.subtotal_price || bill.total_price || 0).toLocaleString('vi-VN')}đ</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-sm text-gray-600 mb-1">Trạng thái</p>
@@ -292,6 +292,7 @@ const OrdersPage = () => {
 
                         {detailBill.order_type === 'booking_table' && detailBill.booking_table && (
                             <div className="bg-gray-50 rounded p-3 mb-4 text-sm space-y-1">
+                                <div className="font-bold text-gray-800 mb-2 border-b pb-1">Đặt bàn</div>
                                 <div><span className="text-gray-600">Bàn:</span> <span className="font-semibold">{detailBill.booking_table.table_numbers?.join(', ') || '—'}</span></div>
                                 <div><span className="text-gray-600">Ngày:</span> <span className="font-semibold">{formatDateOnly(detailBill.booking_table.booking_date)}</span></div>
                                 <div><span className="text-gray-600">Giờ:</span> <span className="font-semibold">{formatTime(detailBill.booking_table.start_time)} - {formatTime(detailBill.booking_table.end_time)}</span></div>
@@ -299,8 +300,9 @@ const OrdersPage = () => {
                         )}
 
                         {detailBill.order_type === 'delivery' && detailBill.delivery && (
-                            <div className="bg-gray-50 rounded p-3 mb-4 text-sm">
-                                <span className="text-gray-600">Địa chỉ giao:</span> <span className="font-semibold">{detailBill.delivery.address || '—'}</span>
+                            <div className="bg-gray-50 rounded p-3 mb-4 text-sm space-y-1">
+                                <div className="font-bold text-gray-800 mb-2 border-b pb-1">Đặt ship</div>
+                                <div><span className="text-gray-600">Địa chỉ giao:</span> <span className="font-semibold">{detailBill.delivery.address || '—'}</span></div>
                             </div>
                         )}
 
@@ -326,6 +328,30 @@ const OrdersPage = () => {
                             <tfoot>
                                 <tr>
                                     <td colSpan={2} className="py-2 px-3 font-bold border border-black">Tổng cộng:</td>
+                                    <td className="py-2 px-3 text-right font-bold text-red-600 border border-black">
+                                        {Number(detailBill.subtotal_price || detailBill.total_price || 0).toLocaleString('vi-VN')}đ
+                                    </td>
+                                </tr>
+                                {detailBill.payment_method === 'vnpay' && (Number(detailBill.subtotal_price || 0) > Number(detailBill.total_price)) && (
+                                    <tr>
+                                        <td colSpan={2} className="py-2 px-3 font-bold border border-black text-orange-500">Giảm giá VNPay:</td>
+                                        <td className="py-2 px-3 text-right font-bold text-orange-500 border border-black">
+                                            -{Number((detailBill.subtotal_price || 0) - (detailBill.total_price || 0)).toLocaleString('vi-VN')}đ
+                                        </td>
+                                    </tr>
+                                )}
+                                {detailBill.payment_method === 'Points' && (
+                                    <tr>
+                                        <td colSpan={2} className="py-2 px-3 font-bold border border-black text-green-600">Đã thanh toán bằng điểm:</td>
+                                        <td className="py-2 px-3 text-right font-bold text-green-600 border border-black">
+                                            -{Number(detailBill.subtotal_price || 0).toLocaleString('vi-VN')}đ
+                                        </td>
+                                    </tr>
+                                )}
+                                <tr>
+                                    <td colSpan={2} className="py-2 px-3 font-bold border border-black text-red-600">
+                                        {detailBill.payment_method === 'vnpay' ? 'Số tiền đã trả:' : 'Số tiền cần trả:'}
+                                    </td>
                                     <td className="py-2 px-3 text-right font-bold text-red-600 border border-black">
                                         {Number(detailBill.total_price || 0).toLocaleString('vi-VN')}đ
                                     </td>

@@ -41,6 +41,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Orders
     Route::apiResource('orders', \App\Http\Controllers\OrderController::class);
     Route::post('orders/bill/{bill}', [\App\Http\Controllers\OrderController::class, 'addToBill']);
+    Route::post('orders/{order}/pay-with-points', [\App\Http\Controllers\BillController::class, 'payWithPointsByOrder']);
 
     // Deliveries
     Route::apiResource('deliveries', \App\Http\Controllers\DeliveryController::class, ['only' => ['index', 'show', 'store']]);

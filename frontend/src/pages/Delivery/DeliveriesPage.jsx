@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { deliveryService, billService, vnpayService, extractListData, userAPI } from '../../services/api';
+import { deliveryService, billService, vnpayService, extractListData, userAPI, orderService } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState, Modal } from '../../components/Shared';
 import { useAuthContext } from '../../context/AuthContext';
 
@@ -19,6 +19,7 @@ const DeliveriesPage = () => {
 
     // Payment locking: null | 'vnpay' | 'points'
     const [payingWith, setPayingWith] = useState(null);
+    const [createdOrderId, setCreatedOrderId] = useState(null);
 
     // Points Payment states
     const { user, fetchUser } = useAuthContext();
@@ -49,6 +50,7 @@ const DeliveriesPage = () => {
                 if (session.stage === 'payment') {
                     setCheckoutStage('payment');
                     if (session.address) setAddress(session.address);
+                    if (session.orderId) setCreatedOrderId(session.orderId);
                 }
             } catch (e) {
                 sessionStorage.removeItem(DELIVERY_SESSION_KEY);
@@ -64,11 +66,31 @@ const DeliveriesPage = () => {
         setIsConfirmModalOpen(true);
     };
 
-    const confirmOrder = () => {
+    const confirmOrder = async () => {
         setIsConfirmModalOpen(false);
-        // Lưu session để khóa trạng thái
-        saveCheckoutSession('payment', { address });
-        setCheckoutStage('payment');
+        try {
+            const orderData = {
+                order_type: 'delivery',
+                delivery: {
+                    address: address,
+                    phone: 'N/A',
+                },
+                items: deliveryCart.map(item => ({
+                    dish_id: item.dish_id,
+                    quantity: item.quantity,
+                    price_at_order: item.price,
+                })),
+            };
+            const orderRes = await orderService.storeOrder(orderData);
+            const orderId = orderRes.data.data.order_id;
+            setCreatedOrderId(orderId);
+
+            // Lưu session để khóa trạng thái
+            saveCheckoutSession('payment', { address, orderId });
+            setCheckoutStage('payment');
+        } catch (err) {
+            setError(err.response?.data?.message || 'Lỗi tạo đơn hàng');
+        }
     };
 
     const handleCartQuantityChange = (idx, amount) => {
@@ -90,27 +112,9 @@ const DeliveriesPage = () => {
         if (payingWith) return; // chặn double-click
         setPayingWith('vnpay');
         try {
-            const orderData = {
-                order_type: 'delivery',
-                delivery: {
-                    address: address,
-                    phone: 'N/A',
-                },
-                payment_method: 'vnpay',
-                items: deliveryCart.map(item => ({
-                    dish_id: item.dish_id,
-                    quantity: item.quantity,
-                    price_at_order: item.price,
-                })),
-            };
-
-            // 1. Tạo bill trước (chưa thanh toán)
-            const billRes = await billService.storeBill(orderData);
-            const billId = billRes.data.data.bill_id;
-
             // 2. Lấy URL thanh toán VNPay
             const vnpayRes = await vnpayService.createPaymentUrl({
-                bill_id: billId,
+                order_id: createdOrderId,
                 amount: cartTotal,
                 order_type: 'delivery',
             });
@@ -150,26 +154,9 @@ const DeliveriesPage = () => {
         if (payingWith) return; // chặn double-click
         setPayingWith('points');
         try {
-            const orderData = {
-                order_type: 'delivery',
-                delivery: {
-                    address: address,
-                    phone: 'N/A',
-                },
-                payment_method: 'vnpay', // backend sẽ đổi thành Points trong hàm payWithPoints
-                items: deliveryCart.map(item => ({
-                    dish_id: item.dish_id,
-                    quantity: item.quantity,
-                    price_at_order: item.price,
-                })),
-            };
-
-            // 1. Tạo bill trước
-            const billRes = await billService.storeBill(orderData);
-            const billId = billRes.data.data.bill_id;
-
             // 2. Thanh toán bằng điểm
-            await billService.payWithPoints(billId);
+            const res = await orderService.payWithPoints(createdOrderId);
+            const billId = res.data.data.bill_id;
 
             // 3. Xóa cart, session và redirect
             localStorage.removeItem('delivery_cart');
@@ -353,10 +340,10 @@ const DeliveriesPage = () => {
                                             onClick={handlePayment}
                                             disabled={!!payingWith}
                                             className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 mb-3 ${payingWith === 'vnpay'
-                                                    ? 'bg-blue-600 text-white cursor-not-allowed'
-                                                    : payingWith === 'points'
-                                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                ? 'bg-blue-600 text-white cursor-not-allowed'
+                                                : payingWith === 'points'
+                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                    : 'bg-blue-600 text-white hover:bg-blue-700'
                                                 }`}
                                         >
                                             {payingWith === 'vnpay' ? (
@@ -370,10 +357,10 @@ const DeliveriesPage = () => {
                                             onClick={handlePointsPaymentClick}
                                             disabled={!!payingWith}
                                             className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 ${payingWith === 'points'
-                                                    ? 'bg-green-600 text-white cursor-not-allowed'
-                                                    : payingWith === 'vnpay'
-                                                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                        : 'bg-green-600 text-white hover:bg-green-700'
+                                                ? 'bg-green-600 text-white cursor-not-allowed'
+                                                : payingWith === 'vnpay'
+                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                                    : 'bg-green-600 text-white hover:bg-green-700'
                                                 }`}
                                         >
                                             {payingWith === 'points' ? (
@@ -488,8 +475,8 @@ const DeliveriesPage = () => {
                             key={f.id}
                             onClick={() => setFilter(f.id)}
                             className={`px-4 py-2 rounded font-semibold whitespace-nowrap ${filter === f.id
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-white border border-gray-300 text-gray-700 hover:border-red-600'
+                                ? 'bg-red-600 text-white'
+                                : 'bg-white border border-gray-300 text-gray-700 hover:border-red-600'
                                 }`}
                         >
                             {f.label}
@@ -513,7 +500,7 @@ const DeliveriesPage = () => {
                 ) : (
                     <div className="space-y-4">
                         {filtered.map((bill, idx) => (
-                            <Card key={bill.order_id || idx} title={`Đơn hàng ${bill.order_id ? bill.order_id.replace('_', '') : ''}`}>
+                            <Card key={bill.order_id || idx} title={`Đơn hàng ${bill.order_id || ''}`}>
                                 <div className="grid md:grid-cols-3 gap-4 mb-4">
                                     <div>
                                         <p className="text-sm text-gray-600">Địa chỉ</p>
@@ -524,10 +511,44 @@ const DeliveriesPage = () => {
                                         <p className="font-semibold">{bill.created_at ? new Date(bill.created_at).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}</p>
                                     </div>
                                     <div>
-                                        <p className="text-sm text-gray-600">Tổng tiền</p>
-                                        <p className="font-bold text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</p>
+                                        <p className="text-sm text-gray-600">Phương thức thanh toán</p>
+                                        <p className="font-bold text-red-600">
+                                            {bill.payment_method === 'Points' ? 'Điểm' : bill.payment_method === 'vnpay' ? 'VNPay' : (bill.payment_method || '—')}
+                                        </p>
                                     </div>
                                 </div>
+
+                                {/* Chi tiết thanh toán */}
+                                {bill.subtotal_price != null && (
+                                    <div className="mt-2 text-sm space-y-1">
+                                        <div className="flex justify-between text-gray-600">
+                                            <span>Tổng tiền:</span>
+                                            <span className="font-semibold">{Number(bill.subtotal_price).toLocaleString('vi-VN')}đ</span>
+                                        </div>
+                                        {bill.payment_method === 'Points' ? (
+                                            <>
+                                                <div className="flex justify-between text-green-700">
+                                                    <span>Đã thanh toán bằng điểm</span>
+                                                    <span className="font-semibold">-{Number(bill.subtotal_price).toLocaleString('vi-VN')}đ</span>
+                                                </div>
+                                                <div className="flex justify-between font-bold text-gray-800">
+                                                    <span>Số tiền đã trả:</span>
+                                                    <span className="text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</span>
+                                                </div>
+                                            </>
+                                        ) : bill.payment_method === 'vnpay' ? (
+                                            <div className="flex justify-between font-bold text-gray-800">
+                                                <span>Số tiền đã trả:</span>
+                                                <span className="text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex justify-between font-bold text-gray-800">
+                                                <span>Số tiền cần trả:</span>
+                                                <span className="text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <div className="mt-4">
                                     <Badge variant={getStatusColor(bill)}>

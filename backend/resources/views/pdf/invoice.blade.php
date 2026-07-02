@@ -113,7 +113,47 @@
         </table>
 
         <div class="total-section">
-            <p class="total-amount">TỔNG CỘNG: {{ number_format($bill->total_price, 0, ',', '.') }} VNĐ</p>
+            @php
+                $subtotal = $order->subtotal_price ?? $bill->total_price;
+                $total = $bill->total_price;
+                $discount = $subtotal - $total;
+
+                $user = $order->user ?? null;
+                $basePoints = floor($total / 1000);
+                $bonusPoints = 0;
+                
+                if ($user && $subtotal >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {
+                    $bonusMap = [
+                        'bronze' => 10,
+                        'silver' => 20,
+                        'gold' => 30,
+                        'platinum' => 40,
+                        'diamond' => 50,
+                    ];
+                    $bonusPoints = $bonusMap[$user->membership] ?? 0;
+                }
+                $totalPoints = $basePoints + $bonusPoints;
+            @endphp
+            
+            @if($bill->payment_method === 'Points')
+                <p style="font-size: 16px; margin-bottom: 5px;">Số tiền phải trả: {{ number_format($subtotal, 0, ',', '.') }} VNĐ</p>
+                <p style="font-size: 14px; color: #27AE60; margin-bottom: 5px;">Hóa đơn này được thanh toán bằng điểm</p>
+                <p class="total-amount">Số tiền đã trả: 0đ</p>
+            @elseif($discount > 0 && $bill->payment_method === 'vnpay')
+                <p style="font-size: 16px; margin-bottom: 5px;">Số tiền phải trả: {{ number_format($subtotal, 0, ',', '.') }} VNĐ</p>
+                <p style="font-size: 14px; color: #E67E22; margin-bottom: 5px;">Hóa đơn đã áp mã giảm giá VNPay. Giảm: {{ number_format($discount, 0, ',', '.') }} VNĐ</p>
+                <p class="total-amount">Còn: {{ number_format($total, 0, ',', '.') }} VNĐ</p>
+            @else
+                <p style="font-size: 16px; margin-bottom: 5px;">Số tiền phải trả: {{ number_format($subtotal, 0, ',', '.') }} VNĐ</p>
+                @if($discount > 0)
+                <p style="font-size: 14px; color: #E67E22; margin-bottom: 5px;">Giảm giá: -{{ number_format($discount, 0, ',', '.') }} VNĐ</p>
+                @endif
+                <p class="total-amount">Số tiền đã trả: {{ number_format($total, 0, ',', '.') }} VNĐ</p>
+            @endif
+        </div>
+        
+        <div style="margin-top: 20px; text-align: right; font-size: 13px; font-weight: bold; color: #333;">
+            <p>Số điểm quý khách tích lũy được từ đơn hàng: {{ $basePoints }} + {{ $bonusPoints }} = {{ $totalPoints }}</p>
         </div>
 
         <div class="footer">

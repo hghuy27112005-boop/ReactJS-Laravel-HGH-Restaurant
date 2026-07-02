@@ -13,7 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->trustProxies(at: '*');
-        $middleware->trustHosts(at: ['^.+\.ngrok-free\.dev$']);
+        $middleware->trustHosts(at: ['^.+\.ngrok-free\.dev$', '^.+\.trycloudflare\.com$']);
         // Bỏ qua CSRF cho tất cả API routes (React dùng Bearer Token, không cần CSRF)
         $middleware->validateCsrfTokens(except: [
             'api/*',

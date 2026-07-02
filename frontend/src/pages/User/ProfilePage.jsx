@@ -425,7 +425,7 @@ export default function ProfilePage() {
     }
   }
 
-  const displayAvatarUrl = previewAvatarUrl || user?.avatar_url || null;
+  const displayAvatarUrl = previewAvatarUrl || user?.avatar_url || (user?.role === 'admin' ? '/hgh-apple.png' : null);
   const initials = user?.username?.[0]?.toUpperCase() ?? "?";
 
   if (loading) {
