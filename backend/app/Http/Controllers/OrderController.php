@@ -11,6 +11,7 @@ use App\Models\Bill;
 use App\Models\BookingTable;
 use App\Models\Dish;
 use App\Models\Delivery;
+use App\Services\OrderCodeGenerator;
 
 class OrderController extends Controller
 {
@@ -60,9 +61,9 @@ class OrderController extends Controller
             
             $totalAmount = round($subtotalBeforePoints, 2);
 
-            $date = date('dmy');
-            $sequence = Order::whereDate('created_at', today())->count() + 1;
-            $orderId = $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+            $generator = new OrderCodeGenerator();
+            $orderSequence = Order::whereDate('created_at', today())->count() + 1;
+            $orderId = $generator->generateOrderId(today()->toDateString(), $orderSequence);
 
             $order = Order::create([
                 'order_id' => $orderId,
@@ -83,7 +84,7 @@ class OrderController extends Controller
 
             if ($validated['order_type'] === 'delivery') {
                 $delSequence = Delivery::whereDate('created_at', today())->count() + 1;
-                $deliveryId = $date . str_pad($delSequence, 4, '0', STR_PAD_LEFT);
+                $deliveryId = $generator->generateDeliveryId(today()->toDateString(), $delSequence);
 
                 \App\Models\Delivery::create([
                     'delivery_id' => $deliveryId,
@@ -98,12 +99,13 @@ class OrderController extends Controller
                 $startTime = $validated['booking_table']['start_time']; 
                 $endTime   = $validated['booking_table']['end_time'];   
 
-                $baseCount = BookingTable::whereDate('created_at', today())->count();
+                $bookingDate = $validated['booking_table']['start_date'];
+                $baseCount = BookingTable::where('booking_date', $bookingDate)->count();
                 $tableIndex = 0;
 
                 foreach ($validated['booking_table']['tables'] as $tableNumber) {
-                    $seq  = str_pad($baseCount + $tableIndex + 1, 4, '0', STR_PAD_LEFT);
-                    $bookingId = $date . $seq;
+                    $seq = $baseCount + $tableIndex + 1;
+                    $bookingId = $generator->generateBookingId($bookingDate, $seq);
                     $tableIndex++;
 
                     BookingTable::create([

@@ -11,6 +11,7 @@ use App\Models\Discount;
 use App\Models\Points;
 use App\Models\Statistics;
 use App\Models\BookingTable;
+use App\Services\OrderCodeGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -103,9 +104,13 @@ class BillController extends Controller
             
             $totalAmount = round($subtotalBeforePoints, 2);
 
-            // Generate IDs
-            $orderId = $this->generateOrderCode();
-            $billId = $this->generateBillCode();
+            $generator = new OrderCodeGenerator();
+            $orderSequence = Order::whereDate('created_at', today())->count() + 1;
+            $deliverySequence = Delivery::whereDate('created_at', today())->count() + 1;
+            $bookingSequence = BookingTable::whereDate('created_at', today())->count() + 1;
+
+            $orderId = $generator->generateOrderId(today()->toDateString(), $orderSequence);
+            $relatedId = $orderId;
 
             // Create Order
             $order = Order::create([
@@ -128,8 +133,8 @@ class BillController extends Controller
 
             // Create delivery if takeout
             if ($validated['order_type'] === 'delivery') {
-                \App\Models\Delivery::create([
-                    'delivery_id' => $this->generateDeliveryCode(),
+                $delivery = \App\Models\Delivery::create([
+                    'delivery_id' => $generator->generateDeliveryId($validated['delivery']['delivery_date'] ?? today()->toDateString(), $deliverySequence),
                     'order_id' => $orderId,
                     'address' => $validated['delivery']['address'],
                     'D_payment_status' => 'unpaid',
@@ -142,13 +147,16 @@ class BillController extends Controller
                 $startTime = $validated['booking_table']['start_time']; // e.g. "07:30"
                 $endTime   = $validated['booking_table']['end_time'];   // e.g. "09:00"
 
-                $baseCount = BookingTable::whereDate('created_at', today())->count();
+                $bookingDate = $validated['booking_table']['start_date'];
+                $baseCount = BookingTable::where('booking_date', $bookingDate)->count();
                 $tableIndex = 0;
 
                 foreach ($validated['booking_table']['tables'] as $tableNumber) {
-                    $date = date('dmy');
-                    $seq  = str_pad($baseCount + $tableIndex + 1, 4, '0', STR_PAD_LEFT);
-                    $bookingId = $date . $seq;
+                    $seq = $baseCount + $tableIndex + 1;
+                    $bookingId = $generator->generateBookingId($bookingDate, $seq);
+                    if ($tableIndex === 0) {
+                        $relatedId = $bookingId;
+                    }
                     $tableIndex++;
 
                     BookingTable::create([
@@ -166,6 +174,8 @@ class BillController extends Controller
 
             // Create Bill — booking_table orders are paid immediately at checkout
             $isBooking = $validated['order_type'] === 'booking_table';
+            $billId = $generator->generateBillId($validated['order_type'], $relatedId);
+
             $bill = Bill::create([
                 'bill_id'                          => $billId,
                 'order_id'                         => $orderId,
@@ -401,42 +411,6 @@ class BillController extends Controller
     /**
      * Generate unique bill code
      */
-    private function generateBillCode()
-    {
-        $date = date('dmy');
-        $sequence = Bill::whereDate('created_at', today())->count() + 1;
-        return $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Generate unique order code
-     */
-    private function generateOrderCode()
-    {
-        $date = date('dmy');
-        $sequence = Order::whereDate('created_at', today())->count() + 1;
-        return $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Generate unique delivery code
-     */
-    private function generateDeliveryCode()
-    {
-        $date = date('dmy');
-        $sequence = Delivery::whereDate('created_at', today())->count() + 1;
-        return $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Generate unique booking code
-     */
-    private function generateBookingCode()
-    {
-        $date = date('dmy');
-        $sequence = BookingTable::whereDate('created_at', today())->count() + 1;
-        return $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
-    }
 
     public function exportPDF(Bill $bill)
     {
@@ -484,9 +458,14 @@ class BillController extends Controller
 
         // Tạo Bill nếu chưa có — trigger sẽ set total_price = 0 nếu là admin
         if (!$bill) {
-            $date     = date('dmy');
-            $sequence = Bill::whereDate('created_at', today())->count() + 1;
-            $billId   = $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+            $generator = new OrderCodeGenerator();
+            $relatedId = $order->order_id;
+            if ($order->isDelivery()) {
+                $relatedId = $order->delivery?->delivery_id ?? $relatedId;
+            } elseif ($order->bookings->isNotEmpty()) {
+                $relatedId = $order->bookings->first()?->booking_id ?? $relatedId;
+            }
+            $billId = $generator->generateBillId($order->order_type, $relatedId);
 
             $bill = Bill::create([
                 'bill_id'        => $billId,

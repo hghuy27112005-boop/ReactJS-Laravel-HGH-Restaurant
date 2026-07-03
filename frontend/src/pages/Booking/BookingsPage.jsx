@@ -42,9 +42,14 @@ const BookingsPage = () => {
     const [unavailableTables, setUnavailableTables] = useState([]);
     const [isCheckingOverlap, setIsCheckingOverlap] = useState(false);
 
-    // Lưu trạng thái đã xác nhận vào sessionStorage
+    // Lưu trạng thái đã xác nhận vào sessionStorage (bao gồm cart + info)
     const saveCheckoutSession = (stage, formData) => {
-        sessionStorage.setItem(BOOKING_SESSION_KEY, JSON.stringify({ stage, ...formData }));
+        const fullData = {
+            stage,
+            bookingCart: bookingCart, // Lưu cart vào session
+            ...formData,
+        };
+        sessionStorage.setItem(BOOKING_SESSION_KEY, JSON.stringify(fullData));
     };
 
     // Xóa session khi hoàn tất / hủy
@@ -74,6 +79,11 @@ const BookingsPage = () => {
                     if (session.tableTypes) setTableTypes(session.tableTypes);
                     if (session.selectedTables) setSelectedTables(session.selectedTables);
                     if (session.orderId) setCreatedOrderId(session.orderId);
+                    // 🔑 Restore cart từ session (trong case quay lại từ VNPay)
+                    if (session.bookingCart && session.bookingCart.length > 0) {
+                        setBookingCart(session.bookingCart);
+                        localStorage.setItem('booking_cart', JSON.stringify(session.bookingCart));
+                    }
                 }
             } catch (e) {
                 sessionStorage.removeItem(BOOKING_SESSION_KEY);
@@ -244,16 +254,19 @@ const BookingsPage = () => {
         setPayingWith('vnpay');
 
         try {
-            // 2. Lấy URL thanh toán VNPay
+            // 1. Lấy URL thanh toán VNPay
             const vnpayRes = await vnpayService.createPaymentUrl({
                 order_id: createdOrderId,
                 amount: cartTotal,
                 order_type: 'booking_table',
             });
 
-            // 3. Xóa session vì sẽ chuyển sang trang VNPay
-            clearCheckoutSession();
-            // 4. Redirect sang VNPay — dọn cart sau khi quay về ở PaymentResultPage
+            // 🔑 ĐỔI: Không xóa session! 
+            // Session sẽ được xóa khi thanh toán thành công (ở PaymentResultPage)
+            // Nếu user quay lại, session vẫn còn → restore form data
+            // (clearCheckoutSession() removed)
+            
+            // 2. Redirect sang VNPay
             window.location.href = vnpayRes.data.payment_url;
 
         } catch (err) {

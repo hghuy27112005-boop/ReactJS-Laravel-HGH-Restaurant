@@ -27,9 +27,14 @@ const DeliveriesPage = () => {
     const [pointsNeeded, setPointsNeeded] = useState(0);
     const [currentPoints, setCurrentPoints] = useState(0);
 
-    // Lưu trạng thái đã xác nhận vào sessionStorage
+    // Lưu trạng thái đã xác nhận vào sessionStorage (bao gồm cart + info)
     const saveCheckoutSession = (stage, data) => {
-        sessionStorage.setItem(DELIVERY_SESSION_KEY, JSON.stringify({ stage, ...data }));
+        const fullData = {
+            stage,
+            deliveryCart: data.deliveryCart || deliveryCart,
+            ...data,
+        };
+        sessionStorage.setItem(DELIVERY_SESSION_KEY, JSON.stringify(fullData));
     };
 
     // Xóa session khi hoàn tất / hủy
@@ -51,6 +56,11 @@ const DeliveriesPage = () => {
                     setCheckoutStage('payment');
                     if (session.address) setAddress(session.address);
                     if (session.orderId) setCreatedOrderId(session.orderId);
+                    // 🔑 Restore cart từ session (trong case quay lại từ VNPay)
+                    if (session.deliveryCart && session.deliveryCart.length > 0) {
+                        setDeliveryCart(session.deliveryCart);
+                        localStorage.setItem('delivery_cart', JSON.stringify(session.deliveryCart));
+                    }
                 }
             } catch (e) {
                 sessionStorage.removeItem(DELIVERY_SESSION_KEY);
@@ -85,8 +95,12 @@ const DeliveriesPage = () => {
             const orderId = orderRes.data.data.order_id;
             setCreatedOrderId(orderId);
 
-            // Lưu session để khóa trạng thái
-            saveCheckoutSession('payment', { address, orderId });
+            // 🔑 Lưu session với đủ thông tin (cart + info) để khôi phục nếu quay lại
+            saveCheckoutSession('payment', { 
+                address, 
+                orderId,
+                deliveryCart: deliveryCart, // Lưu cart vào session
+            });
             setCheckoutStage('payment');
         } catch (err) {
             setError(err.response?.data?.message || 'Lỗi tạo đơn hàng');
@@ -112,16 +126,19 @@ const DeliveriesPage = () => {
         if (payingWith) return; // chặn double-click
         setPayingWith('vnpay');
         try {
-            // 2. Lấy URL thanh toán VNPay
+            // 1. Lấy URL thanh toán VNPay
             const vnpayRes = await vnpayService.createPaymentUrl({
                 order_id: createdOrderId,
                 amount: cartTotal,
                 order_type: 'delivery',
             });
 
-            // 3. Xóa session vì sẽ chuyển sang trang VNPay
-            clearCheckoutSession();
-            // 4. Redirect sang VNPay
+            // 🔑 ĐỔI: Không xóa session! 
+            // Session sẽ được xóa khi thanh toán thành công (ở PaymentResultPage)
+            // Nếu user quay lại, session vẫn còn → restore form data
+            // (clearCheckoutSession() removed)
+            
+            // 2. Redirect sang VNPay
             window.location.href = vnpayRes.data.payment_url;
 
         } catch (err) {

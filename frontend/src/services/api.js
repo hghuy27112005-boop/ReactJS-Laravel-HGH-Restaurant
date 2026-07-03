@@ -161,8 +161,16 @@ export const adminAPI = {
     deliveries: {
         getAll: (filters = {}) =>
             axiosInstance.get('/admin/deliveries', { params: filters }),
-        updateStatus: (id, status) =>
-            axiosInstance.put(`/admin/deliveries/${id}/status`, { status }),
+        getById: (id) =>
+            axiosInstance.get(`/admin/deliveries/${id}`),
+        approve: (id) =>
+            axiosInstance.post(`/admin/deliveries/${id}/approve`),
+        startDelivery: (id) =>
+            axiosInstance.post(`/admin/deliveries/${id}/start`),
+        complete: (id) =>
+            axiosInstance.post(`/admin/deliveries/${id}/complete`),
+        cancel: (id) =>
+            axiosInstance.post(`/admin/deliveries/${id}/cancel`),
     },
     dishes: {
         // Lấy TOÀN BỘ món (kể cả đã ẩn) - chỉ dùng cho trang quản lý admin

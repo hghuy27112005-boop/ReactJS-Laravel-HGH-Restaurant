@@ -6,6 +6,10 @@ import { myBillsAPI } from '../../services/api';
 const MAX_POLL_ATTEMPTS = 5;
 const POLL_INTERVAL_MS = 1500;
 
+// Session keys
+const DELIVERY_SESSION_KEY = 'delivery_checkout_session';
+const BOOKING_SESSION_KEY = 'booking_checkout_session';
+
 const PaymentResultPage = () => {
     const [searchParams] = useSearchParams();
     const [result, setResult] = useState(null);
@@ -31,12 +35,19 @@ const PaymentResultPage = () => {
             confirmed: false, // chưa xác nhận với DB
         });
 
-        // Dọn đúng giỏ hàng tương ứng với loại đơn vừa thanh toán
-        // (không xóa giỏ bên kia — user có thể vẫn đang chuẩn bị đặt thêm)
+        // 🔑 ĐỔI: Dọn cart + session theo kết quả thanh toán
         if (type === 'booking_table') {
             localStorage.removeItem('booking_cart');
+            // Chỉ xóa session khi thanh toán THÀNH CÔNG
+            if (status === 'success') {
+                sessionStorage.removeItem(BOOKING_SESSION_KEY);
+            }
         } else {
             localStorage.removeItem('delivery_cart');
+            // Chỉ xóa session khi thanh toán THÀNH CÔNG
+            if (status === 'success') {
+                sessionStorage.removeItem(DELIVERY_SESSION_KEY);
+            }
         }
 
         // Nếu VNPAY báo thành công, xác nhận lại với backend xem IPN
@@ -104,7 +115,7 @@ const PaymentResultPage = () => {
                         <i className="fas fa-check-circle text-6xl text-green-600 mb-4"></i>
                         <h1 className="text-2xl font-bold text-green-600 mb-2">Thanh toán thành công!</h1>
                         <p className="text-gray-600 mb-2">
-                            Đơn hàng <span className="font-semibold">#{result.billId}</span> đã được ghi nhận.
+                            Đơn hàng <span className="font-semibold">{result.billId}</span> đã được ghi nhận.
                         </p>
 
                         {verifying && (

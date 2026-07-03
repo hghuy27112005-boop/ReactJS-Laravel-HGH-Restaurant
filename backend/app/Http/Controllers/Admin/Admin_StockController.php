@@ -7,7 +7,7 @@ use App\Models\Stock;
 use App\Models\Dish;
 use Illuminate\Http\Request;
 
-class StockController extends Controller
+class Admin_StockController extends Controller
 {
     /**
      * Get all stocks

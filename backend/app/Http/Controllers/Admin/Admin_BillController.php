@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Bill;
 use Illuminate\Http\Request;
 
-class BillController extends Controller
+class Admin_BillController extends Controller
 {
     /**
      * Get all bills (admin view)

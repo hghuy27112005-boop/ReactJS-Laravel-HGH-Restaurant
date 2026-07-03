@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Delivery;
 use App\Models\Bill;
+use App\Services\OrderCodeGenerator;
 
 class DeliveryController extends Controller
 {
@@ -120,15 +121,20 @@ class DeliveryController extends Controller
                 $bill->update(['total_price' => $totalAmount]);
                 $order->delivery->update(['address' => $request->address]);
             } else {
+                $generator = new OrderCodeGenerator();
+                $orderId = $generator->generateOrderId(today()->toDateString(), Order::whereDate('created_at', today())->count() + 1);
+
                 // Create Order
                 $order = Order::create([
+                    'order_id' => $orderId,
                     'user_id' => auth()->id(),
                     'order_type' => 'delivery',
                     'subtotal_price' => $totalAmount
                 ]);
 
                 // Create Delivery
-                Delivery::create([
+                $delivery = Delivery::create([
+                    'delivery_id' => $generator->generateDeliveryId(today()->toDateString(), Delivery::whereDate('created_at', today())->count() + 1),
                     'order_id' => $order->order_id,
                     'address' => $request->address,
                     'D_payment_status' => 'unpaid',
@@ -137,6 +143,7 @@ class DeliveryController extends Controller
 
                 // Create Bill
                 $bill = Bill::create([
+                    'bill_id' => $generator->generateBillId('delivery', $delivery->delivery_id),
                     'order_id' => $order->order_id,
                     'total_price' => $totalAmount,
                     'payment_method' => 'unpaid'

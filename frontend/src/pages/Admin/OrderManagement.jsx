@@ -70,14 +70,23 @@ const OrderManagement = () => {
         return type || 'N/A';
     };
 
-    const getStatusBadge = (status) => {
-        switch (status) {
-            case 'completed': return <Badge variant="success">Hoàn thành</Badge>;
-            case 'pending': return <Badge variant="warning">Chờ xử lý</Badge>;
-            case 'unpaid': return <Badge variant="danger">Chưa thanh toán</Badge>;
-            case 'cancelled': return <Badge variant="dark">Đã hủy</Badge>;
-            default: return <Badge variant="info">{status}</Badge>;
-        }
+    const getBillStatus = (bill) => {
+        const orderType = bill.order?.order_type;
+        const paymentMethod = bill.payment_method;
+        const isPaidByMethod = Boolean(paymentMethod && paymentMethod !== 'unpaid');
+        const isPaidByRecord = orderType === 'delivery'
+            ? bill.delivery?.D_payment_status === 'paid'
+            : orderType === 'booking_table' || orderType === 'booking'
+                ? bill.booking_table?.[0]?.B_payment_status === 'paid'
+                : false;
+
+        const isPaid = isPaidByMethod || isPaidByRecord;
+
+        return (
+            <Badge variant={isPaid ? 'success' : 'warning'}>
+                {isPaid ? '✓ Đã thanh toán' : '⏳ Chờ thanh toán'}
+            </Badge>
+        );
     };
 
     return (
@@ -100,7 +109,7 @@ const OrderManagement = () => {
                             className="bg-white hover:bg-red-50 text-red-600 font-bold py-2 px-4 rounded border-2 border-red-600 flex items-center gap-2 transition"
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
-                            Bộ lọc {(filterUserId || filterOrderType) ? <span className="bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs ml-1">!</span> : null}
+                            Bộ lọc
                         </button>
 
                         {isFilterModalOpen && (
@@ -183,24 +192,24 @@ const OrderManagement = () => {
 
                 {/* Active Filter Tags */}
                 {(filterUserId || filterOrderType || filterDate) && (
-                    <div className="flex flex-wrap items-center gap-3 mb-6 bg-red-50 p-3 rounded-lg border border-red-100">
-                        <span className="text-sm font-semibold text-red-800">Đang lọc theo:</span>
+                    <div className="flex flex-wrap items-center gap-3 mb-6 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                        <span className="text-sm font-semibold text-blue-800">Đang lọc theo:</span>
                         {filterUserId && (
-                            <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border-2 border-red-600 text-red-600 font-bold rounded-full shadow-sm text-sm">
+                            <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border-2 border-blue-400 text-blue-500 font-bold rounded-full shadow-sm text-sm">
                                 ID User: {filterUserId}
-                                <button onClick={() => { setFilterUserId(''); setTempUserId(''); }} className="hover:bg-red-100 rounded-full w-5 h-5 flex items-center justify-center transition">✕</button>
+                                <button onClick={() => { setFilterUserId(''); setTempUserId(''); }} className="hover:bg-blue-100 rounded-full w-5 h-5 flex items-center justify-center transition">✕</button>
                             </span>
                         )}
                         {filterOrderType && (
-                            <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border-2 border-red-600 text-red-600 font-bold rounded-full shadow-sm text-sm">
+                            <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border-2 border-blue-400 text-blue-500 font-bold rounded-full shadow-sm text-sm">
                                 Loại: {getOrderTypeName(filterOrderType)}
-                                <button onClick={() => { setFilterOrderType(''); setTempOrderType(''); }} className="hover:bg-red-100 rounded-full w-5 h-5 flex items-center justify-center transition">✕</button>
+                                <button onClick={() => { setFilterOrderType(''); setTempOrderType(''); }} className="hover:bg-blue-100 rounded-full w-5 h-5 flex items-center justify-center transition">✕</button>
                             </span>
                         )}
                         {filterDate && (
-                            <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border-2 border-red-600 text-red-600 font-bold rounded-full shadow-sm text-sm">
+                            <span className="inline-flex items-center gap-2 px-4 py-1.5 bg-white border-2 border-blue-400 text-blue-500 font-bold rounded-full shadow-sm text-sm">
                                 Ngày: {filterDate}
-                                <button onClick={() => setFilterDate('')} className="hover:bg-red-100 rounded-full w-5 h-5 flex items-center justify-center transition">✕</button>
+                                <button onClick={() => setFilterDate('')} className="hover:bg-blue-100 rounded-full w-5 h-5 flex items-center justify-center transition">✕</button>
                             </span>
                         )}
                         <button
@@ -209,7 +218,7 @@ const OrderManagement = () => {
                                 setFilterOrderType(''); setTempOrderType('');
                                 setFilterDate('');
                             }}
-                            className="text-red-500 hover:text-red-700 text-sm font-semibold underline underline-offset-2 ml-2 transition"
+                            className="text-blue-500 hover:text-blue-700 text-sm font-semibold underline underline-offset-2 ml-2 transition"
                         >
                             Xóa tất cả
                         </button>
@@ -245,7 +254,7 @@ const OrderManagement = () => {
                                                     {bill.order?.user_id || bill.user?.user_id || 'N/A'}
                                                 </td>
                                                 <td className="px-4 py-3 font-medium">
-                                                    {bill.order?.user?.name || bill.user?.name || 'Khách vãng lai'}
+                                                    {bill.order?.user?.username || bill.user?.username || 'N/A'}
                                                 </td>
                                                 <td className="px-4 py-3 font-medium text-blue-700">
                                                     {getOrderTypeName(bill.order?.order_type)}
@@ -254,7 +263,7 @@ const OrderManagement = () => {
                                                     {Number(bill.total_price).toLocaleString('vi-VN')}đ
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    {getStatusBadge(bill.status)}
+                                                    {getBillStatus(bill)}
                                                 </td>
                                                 <td className="px-4 py-3 text-gray-600">
                                                     {bill.payment_method || 'N/A'}

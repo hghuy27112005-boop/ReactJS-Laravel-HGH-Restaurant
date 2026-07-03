@@ -9,7 +9,7 @@ use App\Models\Stock;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
-class DashboardController extends Controller
+class Admin_DashboardController extends Controller
 {
     /**
      * Get admin dashboard data

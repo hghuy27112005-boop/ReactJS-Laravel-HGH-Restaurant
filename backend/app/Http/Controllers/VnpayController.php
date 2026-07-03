@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Bill;
 use App\Models\Order;
 use App\Models\Points;
+use App\Services\OrderCodeGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -26,33 +27,12 @@ class VnpayController extends Controller
             return response()->json(['message' => 'Order not found'], 404);
         }
 
-        // Kiểm tra xem order đã có bill chưa (tránh thanh toán 2 lần)
-        $existingBill = Bill::where('order_id', $orderId)->first();
-        if ($existingBill && $existingBill->payment_method !== null && $existingBill->payment_method !== 'unpaid') {
-            return response()->json(['message' => 'Order already paid'], 400);
-        }
-
-        // Tạo Bill mới nếu chưa có — trigger fn_apply_administrator_free_bill chạy ở đây
-        if (!$existingBill) {
-            $date     = date('dmy');
-            $sequence = Bill::whereDate('created_at', today())->count() + 1;
-            $billId   = $date . str_pad($sequence, 4, '0', STR_PAD_LEFT);
-
-            $existingBill = Bill::create([
-                'bill_id'        => $billId,
-                'order_id'       => $orderId,
-                'user_id'        => $order->user_id,
-                'total_price'    => $order->subtotal_price, // trigger sẽ ghi đè nếu là admin
-                'payment_method' => null,
-            ]);
-        }
-
-        $bill   = $existingBill->fresh(); // lấy giá trị sau trigger
-        $billId = $bill->bill_id;
-        $amount = (int) round((float) $bill->total_price);
+        // ⚠️ KHÔNG tạo Bill ở đây nữa — chỉ lấy amount để validate
+        // Bill sẽ được tạo khi VNPay IPN callback thành công
+        $amount = (int) round((float) $order->subtotal_price);
 
         if ($amount < 1000) {
-            return response()->json(['message' => 'Invalid bill amount (amount < 1000 VND, may be administrator free bill)'], 422);
+            return response()->json(['message' => 'Invalid order amount (amount < 1000 VND)'], 422);
         }
 
         $vnp_TmnCode    = config('vnpay.tmn_code');
@@ -60,7 +40,9 @@ class VnpayController extends Controller
         $vnp_Url        = config('vnpay.url');
         $vnp_ReturnUrl  = config('vnpay.return_url');
 
-        $vnp_TxnRef     = $billId . '_' . time();
+        // 🔑 Sử dụng order_id + timestamp làm TxnRef (không phải bill_id)
+        // Bill ID sẽ được sinh khi IPN thành công
+        $vnp_TxnRef     = $orderId . '_' . time();
         $vnp_Amount     = $amount * 100;
         $vnp_CreateDate = now()->format('YmdHis');
         $vnp_ExpireDate = now()->addMinutes(15)->format('YmdHis');
@@ -112,16 +94,13 @@ class VnpayController extends Controller
         $vnpSecureHash = hash_hmac('sha512', $hashData, $vnp_HashSecret);
         $paymentUrl    = $vnp_Url . "?" . $query . 'vnp_SecureHash=' . $vnpSecureHash;
 
-        Log::info('VNPay createPaymentUrl', [
+        Log::info('VNPay createPaymentUrl (no Bill created yet)', [
             'order_id'    => $orderId,
-            'bill_id'     => $billId,
-            'input_data'  => $inputData,
+            'amount'      => $amount,
+            'txn_ref'     => $vnp_TxnRef,
             'secure_hash' => $vnpSecureHash,
             'payment_url' => $paymentUrl,
         ]);
-
-        $bill->vnp_txn_ref = $vnp_TxnRef;
-        $bill->save();
 
         return response()->json(['payment_url' => $paymentUrl]);
     }
@@ -129,11 +108,10 @@ class VnpayController extends Controller
     /**
      * Người dùng được VNPAY redirect về đây sau khi thanh toán.
      *
-     * QUAN TRỌNG: KHÔNG cập nhật trạng thái đơn hàng ở đây.
-     * Đây là request từ trình duyệt người dùng, không phải xác nhận
-     * đáng tin cậy từ server VNPAY. Việc cập nhật trạng thái "paid"
-     * chỉ được thực hiện trong vnpayIpn() — nơi VNPAY gọi server-to-server.
+     * ⚠️ KHÔNG cập nhật trạng thái ở đây (đó là việc của IPN).
      * Ở đây chỉ dùng để hiển thị kết quả tạm thời cho người dùng.
+     * 
+     * ✅ NEW: Extract orderId từ txn_ref, tìm Bill đã được IPN tạo.
      */
     public function vnpayReturn(Request $request)
     {
@@ -142,29 +120,33 @@ class VnpayController extends Controller
         $result = $this->verifyAndGetResult($request);
 
         $vnp_TxnRef = $result['data']['vnp_TxnRef'] ?? '';
-        $billId     = $this->extractBillId($vnp_TxnRef);
+        $orderId    = $this->extractOrderIdFromTxnRef($vnp_TxnRef);
 
-        if (!$result['is_valid_signature']) {
-            Log::warning('vnpayReturn invalid signature', ['txn_ref' => $vnp_TxnRef]);
-        } else if ($result['is_success']) {
-            // Thực hiện cập nhật trạng thái đơn hàng (fallback cho IPN)
-            // Vì khi dùng ngrok/cloudflare trong môi trường dev, IPN của VNPAY thường
-            // không gọi được do URL thay đổi liên tục và chưa cập nhật trên Dashboard.
-            $vnpAmount = ($result['data']['vnp_Amount'] ?? 0) / 100;
-            $this->processPaymentConfirmation($billId, $vnpAmount);
-            Log::info('vnpayReturn fallback payment confirmation executed', ['bill_id' => $billId]);
+        if (!$orderId) {
+            Log::warning('vnpayReturn invalid TxnRef format', ['txn_ref' => $vnp_TxnRef]);
         }
 
-        // ✅ Lấy order_type từ bill để truyền về frontend
+        // Lấy Bill liên quan (sẽ được IPN tạo nếu thành công)
+        $bill = null;
+        $billId = null;
         $orderType = 'delivery'; // default
-        if ($billId) {
-            $bill = Bill::with('order')->where('bill_id', $billId)->first();
+
+        if ($orderId) {
+            $bill = Bill::with('order')->where('order_id', $orderId)->latest()->first();
+            $billId = $bill?->bill_id;
             $orderType = $bill?->order?->order_type ?? 'delivery';
         }
 
         $frontendUrl  = config('app.frontend_url', 'http://localhost:5173');
         $status       = $result['is_success'] ? 'success' : 'failed';
         $responseCode = $result['data']['vnp_ResponseCode'] ?? '99';
+
+        Log::info('vnpayReturn redirect', [
+            'bill_id'       => $billId,
+            'order_id'      => $orderId,
+            'status'        => $status,
+            'response_code' => $responseCode,
+        ]);
 
         return redirect()->away(
             "{$frontendUrl}/payment-result?bill_id={$billId}&status={$status}&code={$responseCode}&order_type={$orderType}"
@@ -174,6 +156,10 @@ class VnpayController extends Controller
     /**
      * VNPAY gọi server-to-server để xác nhận giao dịch.
      * Đây là NGUỒN DUY NHẤT được tin tưởng để cập nhật trạng thái thanh toán.
+     * 
+     * ✅ NEW FLOW:
+     * - Nếu Bill chưa tồn tại, tạo Bill mới (khi VNPay thành công)
+     * - Sau đó cập nhật payment_method + status
      */
     public function vnpayIpn(Request $request)
     {
@@ -185,59 +171,74 @@ class VnpayController extends Controller
         }
 
         $vnp_TxnRef = $result['data']['vnp_TxnRef'] ?? '';
-        $billId     = $this->extractBillId($vnp_TxnRef);
+        
+        // 🔑 Extract orderId từ txn_ref (format: "{orderId}_{timestamp}")
+        $orderId = $this->extractOrderIdFromTxnRef($vnp_TxnRef);
 
-        if (!$billId) {
+        if (!$orderId) {
             Log::warning('VNPay IPN invalid TxnRef format', ['txn_ref' => $vnp_TxnRef]);
             return response()->json(['RspCode' => '01', 'Message' => 'Order not found']);
         }
 
-        $bill = Bill::with('order.user')->where('bill_id', $billId)->first();
+        // Lấy order
+        $order = Order::with('user', 'delivery', 'booking')->where('order_id', $orderId)->first();
 
-        if (!$bill || !$bill->order) {
-            Log::warning('VNPay IPN bill/order not found', ['bill_id' => $billId]);
+        if (!$order) {
+            Log::warning('VNPay IPN order not found', ['order_id' => $orderId]);
             return response()->json(['RspCode' => '01', 'Message' => 'Order not found']);
         }
 
         $vnpAmount = ($result['data']['vnp_Amount'] ?? 0) / 100;
-
-        // So sánh tiền tệ: dùng sai số cho phép thay vì so sánh float tuyệt đối. 
-        // Nếu vnpAmount < total_price, có thể khách đã áp mã giảm giá VNPay -> chấp nhận và cập nhật lại bill
-        if ((float) $vnpAmount > (float) $bill->total_price + 0.01) {
-            Log::warning('VNPay IPN amount mismatch', [
-                'bill_id'     => $billId,
-                'bill_amount' => $bill->total_price,
-                'vnp_amount'  => $vnpAmount,
-            ]);
-            return response()->json(['RspCode' => '04', 'Message' => 'Invalid amount']);
-        }
-
-        [$record, $paidField, $statusField, $nextStatus] = $this->resolveOrderRecord($bill->order);
-
-        if (!$record) {
-            Log::warning('VNPay IPN order record not found', ['bill_id' => $billId]);
-            return response()->json(['RspCode' => '01', 'Message' => 'Order not found']);
-        }
-
-        if ($record->{$paidField} === 'paid') {
-            return response()->json(['RspCode' => '02', 'Message' => 'Order already confirmed']);
-        }
-
         $responseCode      = $result['data']['vnp_ResponseCode']      ?? '';
         $transactionStatus = $result['data']['vnp_TransactionStatus'] ?? '';
 
-        if ($responseCode === '00' && $transactionStatus === '00') {
-            if ($this->processPaymentConfirmation($billId, $vnpAmount)) {
-                Log::info('VNPay IPN success', ['bill_id' => $billId]);
-            } else {
-                return response()->json(['RspCode' => '99', 'Message' => 'Unknown error']);
-            }
-        } else {
+        // ⚠️ Chỉ xử lý khi VNPay báo thành công
+        if ($responseCode !== '00' || $transactionStatus !== '00') {
             Log::warning('VNPay IPN failed', [
-                'bill_id'            => $billId,
+                'order_id'           => $orderId,
                 'response_code'      => $responseCode,
                 'transaction_status' => $transactionStatus,
             ]);
+            return response()->json(['RspCode' => '00', 'Message' => 'Confirm Success']);
+        }
+
+        // Kiểm tra delivery/booking record
+        [$record, $paidField, $statusField, $nextStatus] = $this->resolveOrderRecord($order);
+
+        if (!$record) {
+            Log::warning('VNPay IPN delivery/booking record not found', ['order_id' => $orderId]);
+            return response()->json(['RspCode' => '01', 'Message' => 'Order record not found']);
+        }
+
+        if ($record->{$paidField} === 'paid') {
+            Log::info('VNPay IPN order already paid', ['order_id' => $orderId]);
+            return response()->json(['RspCode' => '02', 'Message' => 'Order already confirmed']);
+        }
+
+        DB::beginTransaction();
+        try {
+            // 🔑 STEP 1: Tạo Bill nếu chưa tồn tại
+            $bill = Bill::where('order_id', $orderId)->first();
+            if (!$bill) {
+                $bill = $this->createBillForOrder($order, $vnpAmount, $vnp_TxnRef);
+                Log::info('VNPay IPN created new Bill', ['bill_id' => $bill->bill_id, 'order_id' => $orderId]);
+            }
+
+            // 🔑 STEP 2: Cập nhật payment status + delivery/booking status
+            if ($this->processPaymentConfirmation($bill->bill_id, $vnpAmount)) {
+                Log::info('VNPay IPN success', ['bill_id' => $bill->bill_id, 'order_id' => $orderId]);
+                DB::commit();
+            } else {
+                DB::rollBack();
+                return response()->json(['RspCode' => '99', 'Message' => 'Unknown error']);
+            }
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('VNPay IPN transaction failed', [
+                'order_id' => $orderId,
+                'error'    => $e->getMessage(),
+            ]);
+            return response()->json(['RspCode' => '99', 'Message' => 'Unknown error']);
         }
 
         return response()->json(['RspCode' => '00', 'Message' => 'Confirm Success']);
@@ -352,9 +353,36 @@ class VnpayController extends Controller
     }
 
     /**
+     * Trích xuất order_id từ vnp_TxnRef (format: "{orderId}_{timestamp}").
+     * Trả về null nếu format không hợp lệ.
+     */
+    private function extractOrderIdFromTxnRef(string $vnpTxnRef): ?string
+    {
+        if ($vnpTxnRef === '') {
+            return null;
+        }
+
+        // Format: "{orderId}_{timestamp}"
+        $lastUnderscore = strrpos($vnpTxnRef, '_');
+        if ($lastUnderscore === false) {
+            return null;
+        }
+
+        $orderId = substr($vnpTxnRef, 0, $lastUnderscore);
+
+        if (empty($orderId)) {
+            return null;
+        }
+
+        return $orderId;
+    }
+
+    /**
      * Trích xuất bill_id từ vnp_TxnRef (format: "{billId}_{timestamp}").
      * Trả về null nếu format không hợp lệ — tránh update nhầm record
      * khi có request giả mạo hoặc dữ liệu bất thường.
+     * 
+     * ⚠️ DEPRECATED: Dùng extractOrderIdFromTxnRef thay vì.
      */
     private function extractBillId(string $vnpTxnRef): ?string
     {
@@ -378,16 +406,37 @@ class VnpayController extends Controller
     }
 
     /**
-     * Ghi nhận điểm thưởng + cập nhật thống kê sau khi bill được xác nhận
-     * "paid". Gọi từ vnpayIpn() — đây là luồng thanh toán chính của hệ
-     * thống (qua VNPAY), nên Points/Statistics được gắn thẳng vào đây
-     * thay vì chỉ tồn tại trong BillController::processPayment (route
-     * không nằm trong luồng thanh toán thực tế hiện tại).
-     *
-     * Thứ tự: Points trước, Statistics sau — nếu Points lỗi, toàn bộ
-     * transaction (bao gồm cả việc set "paid") sẽ rollback, tránh trạng
-     * thái nửa-thanh-toán nửa-không.
+     * 🔑 Tạo Bill mới từ Order khi VNPay callback thành công.
+     * Gọi trigger fn_apply_administrator_free_bill để có giá cuối cùng.
+     * 
+     * @param Order $order
+     * @param float $vnpAmount - Số tiền thanh toán từ VNPay
+     * @param string $vnp_TxnRef - Transaction reference để lưu
+     * @return Bill
      */
+    private function createBillForOrder($order, $vnpAmount, $vnp_TxnRef): Bill
+    {
+        $generator = new OrderCodeGenerator();
+        $relatedId = $order->order_id;
+        if ($order->isDelivery()) {
+            $relatedId = $order->delivery?->delivery_id ?? $relatedId;
+        } elseif ($order->booking) {
+            $relatedId = $order->booking?->booking_id ?? $relatedId;
+        }
+        $billId = $generator->generateBillId($order->order_type, $relatedId);
+
+        $bill = Bill::create([
+            'bill_id'        => $billId,
+            'order_id'       => $order->order_id,
+            'user_id'        => $order->user_id,
+            'total_price'    => $order->subtotal_price, // trigger sẽ ghi đè nếu là admin
+            'payment_method' => null, // cập nhật ở processPaymentConfirmation
+            'vnp_txn_ref'    => $vnp_TxnRef,
+        ]);
+
+        return $bill->fresh(); // lấy giá trị sau trigger
+    }
+    
     private function awardPointsAndStats(Bill $bill, $order): void
     {
         $amountPaid = (float) $bill->total_price;      

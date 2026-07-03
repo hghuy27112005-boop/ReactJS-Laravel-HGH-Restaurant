@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dishAPI } from '../../services/api';
 import { Loading, ErrorMessage, EmptyState, Button, Modal } from '../../components/Shared';
+import { useAuthContext } from '../../context/AuthContext';
 
 const MenuPage = () => {
     const navigate = useNavigate();
+    const { isAuthenticated } = useAuthContext();
     const [dishes, setDishes] = useState([]);
     const [filteredDishes, setFilteredDishes] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -111,6 +113,11 @@ const MenuPage = () => {
     };
 
     const handleAddToCart = (dish, type) => {
+        if (!isAuthenticated) {
+            alert('Vui lòng đăng nhập để thực hiện thao tác này');
+            navigate('/login?tab=register');
+            return;
+        }
         setSelectedDish(dish);
         setQuantity(1);
         setOrderType(type);

@@ -69,22 +69,26 @@ Route::middleware(['auth:sanctum'])->group(function () {
 // Admin Routes
 Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     // Dashboard
-    Route::get('admin/dashboard', [\App\Http\Controllers\Admin\DashboardController::class, 'index']);
+    Route::get('admin/dashboard', [\App\Http\Controllers\Admin\Admin_DashboardController::class, 'index']);
 
     // Bills Management
-    Route::get('admin/bills', [\App\Http\Controllers\Admin\BillController::class, 'index']);
-    Route::put('admin/bills/{bill}', [\App\Http\Controllers\Admin\BillController::class, 'update']);
+    Route::get('admin/bills', [\App\Http\Controllers\Admin\Admin_BillController::class, 'index']);
+    Route::put('admin/bills/{bill}', [\App\Http\Controllers\Admin\Admin_BillController::class, 'update']);
 
     // Deliveries Management
-    Route::get('admin/deliveries', [\App\Http\Controllers\Admin\DeliveryController::class, 'index']);
-    Route::put('admin/deliveries/{delivery}/status', [\App\Http\Controllers\Admin\DeliveryController::class, 'updateStatus']);
+    Route::get('admin/deliveries', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'index']);
+    Route::get('admin/deliveries/{delivery}', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'show']);
+    Route::post('admin/deliveries/{delivery}/approve', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'approve']);
+    Route::post('admin/deliveries/{delivery}/start', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'startDelivery']);
+    Route::post('admin/deliveries/{delivery}/complete', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'completeDelivery']);
+    Route::post('admin/deliveries/{delivery}/cancel', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'cancel']);
 
     // Stock Management
-    Route::apiResource('admin/stocks', \App\Http\Controllers\Admin\StockController::class);
-    Route::get('admin/stocks/low-stock', [\App\Http\Controllers\Admin\StockController::class, 'lowStock']);
+    Route::apiResource('admin/stocks', \App\Http\Controllers\Admin\Admin_StockController::class);
+    Route::get('admin/stocks/low-stock', [\App\Http\Controllers\Admin\Admin_StockController::class, 'lowStock']);
 
     // Users Management
-    Route::apiResource('admin/users', \App\Http\Controllers\Admin\UserController::class);
+    Route::apiResource('admin/users', \App\Http\Controllers\Admin\Admin_UserController::class);
 
     // Dishes Management
     // GET danh sách TẤT CẢ món (kể cả đã ẩn) - dùng cho trang quản lý, khác với /dishes (chỉ món đang bán)

@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\BookingTable;
 use App\Models\Bill;
+use App\Services\OrderCodeGenerator;
 
 class BookingTableController extends Controller
 {
@@ -193,8 +194,11 @@ class BookingTableController extends Controller
 
                 // Xóa hết các dòng bàn cũ rồi lưu lại đầy đủ danh sách bàn mới
                 $order->bookings()->delete();
-                foreach ($tables as $t) {
+                $generator = new OrderCodeGenerator();
+                foreach ($tables as $index => $t) {
+                    $bookingId = $generator->generateBookingId($bookingDate, BookingTable::where('booking_date', $bookingDate)->count() + $index + 1);
                     BookingTable::create([
+                        'booking_id' => $bookingId,
                         'order_id' => $order->order_id,
                         'table_number' => $t['number'],
                         'booking_date' => $bookingDate,
@@ -205,15 +209,28 @@ class BookingTableController extends Controller
                     ]);
                 }
             } else {
+                $generator = new OrderCodeGenerator();
+                $orderId = $generator->generateOrderId(today()->toDateString(), Order::whereDate('created_at', today())->count() + 1);
+
                 $order = Order::create([
+                    'order_id' => $orderId,
                     'user_id' => auth()->id(),
                     'order_type' => 'booking',
                     'subtotal_price' => $totalAmount
                 ]);
 
+                $firstBookingId = null;
+                $bookingCountForDate = BookingTable::where('booking_date', $bookingDate)->count();
+
                 // Lưu ĐẦY ĐỦ tất cả các bàn đã chọn (không chỉ bàn đầu tiên)
-                foreach ($tables as $t) {
+                foreach ($tables as $index => $t) {
+                    $bookingId = $generator->generateBookingId($bookingDate, $bookingCountForDate + $index + 1);
+                    if ($index === 0) {
+                        $firstBookingId = $bookingId;
+                    }
+
                     BookingTable::create([
+                        'booking_id' => $bookingId,
                         'order_id' => $order->order_id,
                         'table_number' => $t['number'],
                         'booking_date' => $bookingDate,
@@ -225,6 +242,7 @@ class BookingTableController extends Controller
                 }
 
                 $bill = Bill::create([
+                    'bill_id' => $generator->generateBillId('booking', $firstBookingId ?? $order->order_id),
                     'order_id' => $order->order_id,
                     'total_price' => $totalAmount,
                     'payment_method' => 'unpaid'

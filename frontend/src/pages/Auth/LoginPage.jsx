@@ -4,7 +4,11 @@ import { ErrorMessage, SuccessMessage } from '../../components/Shared';
 
 const LoginPage = () => {
     const { login, register, loading, error, setError } = useAuthContext();
-    const [activeTab, setActiveTab] = useState('login');
+    const getInitialTab = () => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('tab') === 'register' ? 'register' : 'login';
+    };
+    const [activeTab, setActiveTab] = useState(getInitialTab);
     const [localError, setLocalError] = useState(null);
     const [successMessage, setSuccessMessage] = useState(null);
 

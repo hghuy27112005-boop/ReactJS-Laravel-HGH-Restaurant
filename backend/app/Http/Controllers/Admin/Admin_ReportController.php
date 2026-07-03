@@ -8,7 +8,7 @@ use App\Models\Delivery;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class ReportController extends Controller
+class Admin_ReportController extends Controller
 {
     /**
      * Get revenue report
