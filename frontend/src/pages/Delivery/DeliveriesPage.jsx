@@ -96,8 +96,8 @@ const DeliveriesPage = () => {
             setCreatedOrderId(orderId);
 
             // 🔑 Lưu session với đủ thông tin (cart + info) để khôi phục nếu quay lại
-            saveCheckoutSession('payment', { 
-                address, 
+            saveCheckoutSession('payment', {
+                address,
                 orderId,
                 deliveryCart: deliveryCart, // Lưu cart vào session
             });
@@ -137,7 +137,7 @@ const DeliveriesPage = () => {
             // Session sẽ được xóa khi thanh toán thành công (ở PaymentResultPage)
             // Nếu user quay lại, session vẫn còn → restore form data
             // (clearCheckoutSession() removed)
-            
+
             // 2. Redirect sang VNPay
             window.location.href = vnpayRes.data.payment_url;
 
@@ -318,10 +318,28 @@ const DeliveriesPage = () => {
                                     </tfoot>
                                 </table>
                                 <button
-                                    onClick={() => { localStorage.removeItem('delivery_cart'); setDeliveryCart([]); }}
+                                    onClick={async () => {
+                                        const ok = window.confirm('Bạn có chắc muốn xóa đơn hàng? Hành động này sẽ xóa toàn bộ món và đơn hàng hiện tại.');
+                                        if (!ok) return;
+
+                                        if (createdOrderId) {
+                                            try {
+                                                await orderService.deleteOrder(createdOrderId);
+                                            } catch (err) {
+                                                setError(err.response?.data?.message || 'Lỗi khi xóa đơn hàng');
+                                                return;
+                                            }
+                                        }
+
+                                        localStorage.removeItem('delivery_cart');
+                                        clearCheckoutSession();
+                                        setDeliveryCart([]);
+                                        setCreatedOrderId(null);
+                                        setCheckoutStage('info');
+                                    }}
                                     className="mt-4 px-4 py-2 text-sm font-bold rounded border-2 border-red-600 text-red-600 bg-white hover:bg-red-600 hover:text-white transition"
                                 >
-                                    Xóa tất cả món
+                                    Xóa đơn hàng
                                 </button>
                             </div>
                             <div>
@@ -388,7 +406,18 @@ const DeliveriesPage = () => {
                                         </button>
                                         {/* Nút quay lại - chỉ khi chưa bấm thanh toán */}
                                         <button
-                                            onClick={() => { clearCheckoutSession(); setCheckoutStage('info'); }}
+                                            onClick={async () => {
+                                                if (createdOrderId) {
+                                                    try {
+                                                        await orderService.deleteOrder(createdOrderId);
+                                                    } catch (err) {
+                                                        console.warn('Không thể xóa đơn cũ khi sửa thông tin:', err);
+                                                    }
+                                                }
+                                                clearCheckoutSession();
+                                                setCreatedOrderId(null);
+                                                setCheckoutStage('info');
+                                            }}
                                             disabled={!!payingWith}
                                             className="w-full mt-2 text-gray-500 hover:text-red-600 text-sm font-bold py-2 disabled:opacity-40 disabled:cursor-not-allowed"
                                         >
@@ -517,7 +546,7 @@ const DeliveriesPage = () => {
                 ) : (
                     <div className="space-y-4">
                         {filtered.map((bill, idx) => (
-                            <Card key={bill.order_id || idx} title={`Đơn hàng ${bill.order_id || ''}`}>
+                            <Card key={bill.order_id || idx} title={`Đơn hàng ${bill.order_stt || bill.order_id || ''} ngày ${bill.created_at ? new Date(bill.created_at).toLocaleDateString('vi-VN') : '—'}`}>
                                 <div className="grid md:grid-cols-3 gap-4 mb-4">
                                     <div>
                                         <p className="text-sm text-gray-600">Địa chỉ</p>

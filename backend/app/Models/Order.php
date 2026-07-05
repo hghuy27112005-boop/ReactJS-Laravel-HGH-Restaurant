@@ -18,6 +18,7 @@ class Order extends Model
 
     protected $fillable = [
         'order_id',
+        'order_stt',
         'user_id',
         'order_type',
         'subtotal_price',
@@ -57,6 +58,12 @@ class Order extends Model
         return $this->hasMany(BookingTable::class, 'order_id', 'order_id');
     }
 
+    // Backwards-compatible alias for code that expects a "booking_table" relation
+    public function booking_table()
+    {
+        return $this->hasOne(BookingTable::class, 'order_id', 'order_id');
+    }
+
     public function delivery()
     {
         return $this->hasOne(Delivery::class, 'order_id', 'order_id');
@@ -90,7 +97,7 @@ class Order extends Model
 
     public function isBooking()
     {
-        return $this->order_type === 'booking';
+        return $this->order_type === 'booking_table';
     }
 
     public function isDelivery()

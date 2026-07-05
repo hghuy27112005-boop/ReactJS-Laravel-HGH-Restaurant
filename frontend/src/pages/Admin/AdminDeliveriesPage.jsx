@@ -175,7 +175,7 @@ const AdminDeliveriesPage = () => {
                 {/* Search and Filter */}
                 <div className="mb-6 space-y-4">
                     <div className="flex gap-2 flex-wrap">
-                        {['all', 'waiting_info', 'shipping', 'completed', 'cancelled'].map(status => (
+                        {['all', 'shipping', 'completed', 'cancelled'].map(status => (
                             <button
                                 key={status}
                                 onClick={() => { setFilter(status); setCurrentPage(1); }}
@@ -224,15 +224,11 @@ const AdminDeliveriesPage = () => {
                                     deliveries.map(delivery => (
                                         <tr
                                             key={delivery.delivery_id}
-                                            className="border-b hover:bg-gray-50 cursor-pointer"
-                                            onClick={() => {
-                                                setSelectedDelivery(delivery);
-                                                setShowModal(true);
-                                            }}
+                                            className="border-b hover:bg-gray-50"
                                         >
                                             <td className="px-4 py-2 font-mono text-xs font-bold">{delivery.delivery_id}</td>
                                             <td className="px-4 py-2">
-                                                <div className="font-semibold">{delivery.order?.user?.name}</div>
+                                                <div className="font-semibold">{delivery.order?.user?.username || delivery.user?.username || 'N/A'}</div>
                                                 <div className="text-xs text-gray-500">{delivery.order?.user?.phone}</div>
                                             </td>
                                             <td className="px-4 py-2 text-xs">{delivery.address?.substring(0, 30)}...</td>
@@ -251,8 +247,7 @@ const AdminDeliveriesPage = () => {
                                             </td>
                                             <td className="px-4 py-2">
                                                 <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
+                                                    onClick={() => {
                                                         setSelectedDelivery(delivery);
                                                         setShowModal(true);
                                                     }}
@@ -292,18 +287,18 @@ const AdminDeliveriesPage = () => {
             {/* Modal Chi tiết */}
             {showModal && selectedDelivery && (
                 <div
-                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+                    className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-[1100]"
                     onClick={() => setShowModal(false)}
                 >
                     <div
                         className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <div className="sticky top-0 bg-gray-100 px-6 py-4 flex justify-between items-center border-b">
-                            <h2 className="text-xl font-bold">Chi tiết giao hàng</h2>
+                        <div className="sticky top-0 bg-red-600 px-6 py-4 flex justify-between items-center border-b">
+                            <h2 className="text-xl font-bold text-white">Chi tiết giao hàng</h2>
                             <button
                                 onClick={() => setShowModal(false)}
-                                className="text-2xl hover:text-gray-700"
+                                className="text-2xl text-white hover:text-gray-200"
                             >
                                 ×
                             </button>
@@ -330,12 +325,12 @@ const AdminDeliveriesPage = () => {
                             </div>
 
                             {/* Thông tin khách hàng */}
-                            <div className="border-t pt-4">
+                            <div className="border-t border-red-600 pt-4">
                                 <h3 className="font-bold text-lg mb-3">Thông tin khách hàng</h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <p className="text-xs text-gray-500">Tên</p>
-                                        <p className="font-semibold">{selectedDelivery.order?.user?.name}</p>
+                                        <p className="font-semibold">{selectedDelivery.order?.user?.username || selectedDelivery.user?.username || 'N/A'}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500">Email</p>
@@ -343,13 +338,13 @@ const AdminDeliveriesPage = () => {
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500">Điện thoại</p>
-                                        <p className="text-sm">{selectedDelivery.order?.user?.phone || 'N/A'}</p>
+                                        <p className="text-sm">{selectedDelivery.order?.user?.tele_number || 'N/A'}</p>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Trạng thái */}
-                            <div className="border-t pt-4">
+                            <div className="border-t border-red-600 pt-4">
                                 <h3 className="font-bold text-lg mb-3">Trạng thái</h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
@@ -368,7 +363,7 @@ const AdminDeliveriesPage = () => {
                             </div>
 
                             {/* Timeline */}
-                            <div className="border-t pt-4">
+                            <div className="border-t border-red-600 pt-4">
                                 <h3 className="font-bold text-lg mb-3">Timeline</h3>
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between">
@@ -391,7 +386,7 @@ const AdminDeliveriesPage = () => {
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="border-t pt-4 flex gap-2">
+                            <div className="border-t border-red-600 pt-4 flex gap-2">
                                 {getActionButtons(selectedDelivery) && (
                                     <>
                                         {getActionButtons(selectedDelivery)}

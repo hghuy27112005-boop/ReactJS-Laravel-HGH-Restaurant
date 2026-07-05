@@ -11,9 +11,9 @@ class OrderCodeGeneratorTest extends TestCase
     {
         $generator = new OrderCodeGenerator();
 
-        $this->assertSame('001', $generator->generateOrderId('2026-07-03', 1));
-        $this->assertSame('010', $generator->generateOrderId('2026-07-03', 10));
-        $this->assertSame('001', $generator->generateOrderId('2026-07-04', 1));
+        $this->assertSame('030726001', $generator->generateOrderId('2026-07-03', 1));
+        $this->assertSame('030726010', $generator->generateOrderId('2026-07-03', 10));
+        $this->assertSame('040726001', $generator->generateOrderId('2026-07-04', 1));
         $this->assertIsString($generator->generateOrderId('2026-07-03', 1));
     }
 
@@ -37,7 +37,7 @@ class OrderCodeGeneratorTest extends TestCase
     {
         $generator = new OrderCodeGenerator();
 
-        $this->assertSame('0307261001', $generator->generateBillId('booking', '0307261001'));
+        $this->assertSame('0307261001', $generator->generateBillId('booking_table', '0307261001'));
         $this->assertSame('0307262001', $generator->generateBillId('delivery', '0307262001'));
     }
 }

@@ -224,6 +224,7 @@ export const billService = {
 export const orderService = {
     storeOrder: (data) => orderAPI.create(data),
     payWithPoints: (orderId) => axiosInstance.post(`/orders/${orderId}/pay-with-points`),
+    deleteOrder: (orderId) => orderAPI.delete(orderId),
 };
 
 export const bookingService = {

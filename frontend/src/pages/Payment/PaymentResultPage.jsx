@@ -23,6 +23,7 @@ const PaymentResultPage = () => {
         const status = searchParams.get('status');   // 'success' | 'failed'
         const code = searchParams.get('code');     // vnp_ResponseCode gốc
         const billId = searchParams.get('bill_id');
+        const orderId = searchParams.get('order_id');
         const type = searchParams.get('order_type');
 
         setOrderType(type || 'delivery');
@@ -53,8 +54,17 @@ const PaymentResultPage = () => {
         // Nếu VNPAY báo thành công, xác nhận lại với backend xem IPN
         // đã cập nhật trạng thái "paid" thật trong DB chưa — vì IPN chạy
         // bất đồng bộ, có thể chưa xử lý xong lúc trang này tải.
-        if (status === 'success' && billId) {
-            verifyBillStatus(billId);
+        // Nếu billId có, verify trực tiếp theo billId.
+        // Nếu billId chưa tồn tại nhưng order_id có (VNPay redirect trước khi IPN tạo Bill),
+        // thử poll tìm Bill bằng order_id.
+        if (status === 'success') {
+            if (billId) {
+                verifyBillStatus(billId);
+            } else if (orderId) {
+                verifyBillByOrderId(orderId);
+            } else {
+                setVerifying(false);
+            }
         } else {
             setVerifying(false);
         }
@@ -92,6 +102,30 @@ const PaymentResultPage = () => {
             }
         } catch (err) {
             console.error('Không thể xác nhận trạng thái đơn hàng:', err);
+            setVerifying(false);
+        }
+    };
+
+    const verifyBillByOrderId = async (orderId) => {
+        try {
+            const res = await myBillsAPI.getAll();
+            const list = res?.data?.data ?? [];
+            const bill = Array.isArray(list) ? list.find(b => String(b.order_id) === String(orderId)) : null;
+
+            if (bill) {
+                // Found bill for orderId — verify its payment status
+                return verifyBillStatus(bill.bill_id);
+            }
+
+            // Not found yet — retry a few times similar to verifyBillStatus
+            pollCountRef.current += 1;
+            if (pollCountRef.current < MAX_POLL_ATTEMPTS) {
+                setTimeout(() => verifyBillByOrderId(orderId), POLL_INTERVAL_MS);
+            } else {
+                setVerifying(false);
+            }
+        } catch (err) {
+            console.error('Không thể xác nhận bill bằng orderId:', err);
             setVerifying(false);
         }
     };

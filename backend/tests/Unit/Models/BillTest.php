@@ -31,15 +31,15 @@ class BillTest extends TestCase
     }
 
     /**
-     * Test: Bill type can be 'booking' or 'delivery'
+     * Test: Bill type can be 'booking_table' or 'delivery'
      */
     public function test_bill_type_is_valid(): void
     {
-        $bookingBill = Bill::factory()->create(['type' => 'booking']);
+        $bookingBill = Bill::factory()->create(['type' => 'booking_table']);
         $deliveryBill = Bill::factory()->create(['type' => 'delivery']);
 
-        $this->assertIn($bookingBill->type, ['booking', 'delivery', 'in-store']);
-        $this->assertIn($deliveryBill->type, ['booking', 'delivery', 'in-store']);
+        $this->assertIn($bookingBill->type, ['booking_table', 'delivery', 'in-store']);
+        $this->assertIn($deliveryBill->type, ['booking_table', 'delivery', 'in-store']);
     }
 
     /**

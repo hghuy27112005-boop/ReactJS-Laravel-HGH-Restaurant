@@ -64,9 +64,11 @@ class OrderController extends Controller
             $generator = new OrderCodeGenerator();
             $orderSequence = Order::whereDate('created_at', today())->count() + 1;
             $orderId = $generator->generateOrderId(today()->toDateString(), $orderSequence);
+            $orderStt = $generator->generateOrderStt($orderSequence);
 
             $order = Order::create([
                 'order_id' => $orderId,
+                'order_stt' => $orderStt,
                 'user_id' => $request->user()->user_id,
                 'order_type' => $validated['order_type'],
                 'subtotal_price' => $subtotalBeforePoints,
@@ -135,6 +137,18 @@ class OrderController extends Controller
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
+
+    public function destroy(Order $order)
+    {
+        // Order deletion should cascade to related items, booking tables, deliveries, and bills.
+        try {
+            $order->delete();
+            return response()->json(['message' => 'Đã xóa đơn hàng thành công'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
     /**
      * Add dish to session cart
      */
@@ -247,7 +261,7 @@ class OrderController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'Không tìm thấy hóa đơn.'], 400);
             }
 
-            $bill = Bill::with('order.booking', 'order.delivery')->where('bill_id', $billCode)->first();
+            $bill = Bill::with('order.booking_table', 'order.delivery')->where('bill_id', $billCode)->first();
 
             if (!$bill) {
                 DB::rollBack();
@@ -259,7 +273,7 @@ class OrderController extends Controller
             }
 
             // Check overlap again for booking
-            if ($bill->order->order_type === 'booking') {
+            if ($bill->order->order_type === 'booking_table') {
                 $booking = $bill->order->booking;
                 if ($booking) {
                     $overlap = DB::table('booking_tables')
@@ -308,7 +322,7 @@ class OrderController extends Controller
 
             session(['paid_' . $type => true]);
 
-            if ($bill->order->order_type === 'booking') {
+            if ($bill->order->order_type === 'booking_table') {
                 session()->forget(['table_numbers', 'tables_detail', 'start_date', 'start_time', 'end_time', 'total_tables', 'types', 'table_number']);
             }
 
@@ -329,7 +343,7 @@ class OrderController extends Controller
         $date = $request->input('date');
         $sort = $request->input('sort', 'desc');
 
-        $query = Order::with(['bill', 'items.dish', 'booking', 'delivery'])
+        $query = Order::with(['bill', 'items.dish', 'booking_table', 'delivery'])
             ->where('user_id', auth()->id());
 
         if ($q) {
@@ -353,7 +367,7 @@ class OrderController extends Controller
         $order_type = $request->input('order_type');
         $username = $request->input('username');
 
-        $query = Order::with(['bill', 'items.dish', 'booking', 'delivery', 'user']);
+        $query = Order::with(['bill', 'items.dish', 'booking_table', 'delivery', 'user']);
 
         if ($q) {
             $query->whereHas('bill', function ($b) use ($q) {
@@ -399,6 +413,7 @@ class OrderController extends Controller
             return [
                 'bill_id'        => $bill->bill_id,
                 'order_id'       => $order->order_id,
+                'order_stt'      => $order->order_stt,
                 'order_type'     => $order->order_type,
                 'subtotal_price' => $order->subtotal_price,   // giá gốc trước khi giảm giá
                 'total_price'    => $bill->total_price,        // giá thực trả (sau giảm giá VNPay hoặc 0 nếu điểm)
@@ -437,14 +452,11 @@ class OrderController extends Controller
     public function exportPDF(Request $request)
     {
         $type = $request->query('type');
-        $code = $request->query('code'); 
+        $code = $request->query('code') ?: session()->get('last_bill_code_' . $type);
 
-        if ($code) {
-            $bill = Bill::with(['order.items.dish', 'order.booking', 'order.delivery'])->where('bill_id', $code)->first();
-        } else {
-            $billCode = session()->get('last_bill_code_' . $type);
-            $bill = Bill::with(['order.items.dish', 'order.booking', 'order.delivery'])->where('bill_id', $billCode)->first();
-        }
+        $bill = Bill::with(['order.items.dish', 'order.booking_table', 'order.delivery'])
+            ->where('bill_id', $code)
+            ->first();
 
         if (!$bill) {
             return "Không tìm thấy hóa đơn!";

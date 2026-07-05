@@ -198,7 +198,7 @@ const OrdersPage = () => {
                                 const delivery = bill.delivery;
 
                                 return (
-                                    <Card key={bill.bill_id || bill.order_id || idx} title={`Đơn hàng ${bill.order_id || ''} ngày ${formatDateOnly(bill.created_at)}`}>
+                                    <Card key={bill.bill_id || bill.order_id || idx} title={`Đơn hàng ${bill.order_stt || bill.order_id || ''} ngày ${formatDateOnly(bill.created_at)}`}>
                                         <div className="mb-3">
                                             <Badge variant="info">{isBooking ? 'Đặt bàn' : 'Đặt ship'}</Badge>
                                         </div>

@@ -65,7 +65,7 @@ const OrderManagement = () => {
     }, [sortOrder, filterDate, filterUserId, filterOrderType]);
 
     const getOrderTypeName = (type) => {
-        if (type === 'booking' || type === 'booking_table') return 'Đặt bàn';
+        if (type === 'booking_table') return 'Đặt bàn';
         if (type === 'delivery') return 'Đặt ship';
         return type || 'N/A';
     };
@@ -76,7 +76,7 @@ const OrderManagement = () => {
         const isPaidByMethod = Boolean(paymentMethod && paymentMethod !== 'unpaid');
         const isPaidByRecord = orderType === 'delivery'
             ? bill.delivery?.D_payment_status === 'paid'
-            : orderType === 'booking_table' || orderType === 'booking'
+            : orderType === 'booking_table'
                 ? bill.booking_table?.[0]?.B_payment_status === 'paid'
                 : false;
 

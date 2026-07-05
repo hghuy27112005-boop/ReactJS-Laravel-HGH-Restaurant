@@ -16,6 +16,7 @@ class BookingTable extends Model
 
     protected $fillable = [
         'booking_id',
+        'booking_stt',
         'order_id',
         'table_number',
         'booking_date',

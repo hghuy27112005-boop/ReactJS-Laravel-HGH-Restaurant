@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
@@ -10,7 +11,9 @@ return new class extends Migration
     {
         Schema::create('booking_tables', function (Blueprint $table) {
 
-            $table->string('booking_id', 20)->primary();
+            $table->string('booking_id', 20)->primary(); 
+
+            $table->string('booking_stt', 20)->nullable();
 
             $table->string('order_id', 20);
 
@@ -51,10 +54,27 @@ return new class extends Migration
             $table->index('booking_date');
 
         });
+
+        // Bắt buộc cho EXCLUDE constraint dùng GiST với kiểu integer (table_number)
+        DB::statement('CREATE EXTENSION IF NOT EXISTS btree_gist');
+
+        // Chặn 2 booking cùng bàn, cùng ngày, khung giờ chồng lấn — ở tầng DB,
+        // không phụ thuộc việc ứng dụng đọc dữ liệu trước hay sau (chặn race condition).
+        // Booking đã 'cancelled' không tính là chiếm chỗ.
+        DB::statement("
+            ALTER TABLE booking_tables
+            ADD CONSTRAINT booking_tables_no_overlap
+            EXCLUDE USING gist (
+                table_number WITH =,
+                tsrange(booking_date + start_time, booking_date + end_time) WITH &&
+            )
+            WHERE (booking_status <> 'cancelled')
+        ");
     }
 
     public function down(): void
     {
+        DB::statement('ALTER TABLE booking_tables DROP CONSTRAINT IF EXISTS booking_tables_no_overlap');
         Schema::dropIfExists('booking_tables');
     }
 };

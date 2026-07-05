@@ -14,12 +14,17 @@ const BookingsPage = () => {
     // Cart states
     const [bookingCart, setBookingCart] = useState([]);
 
-    const [checkoutStage, setCheckoutStage] = useState('wizard'); // wizard, payment, processing
     const [wizardStep, setWizardStep] = useState(1);
 
     // Payment locking: null | 'vnpay' | 'points'
     const [payingWith, setPayingWith] = useState(null);
     const [createdOrderId, setCreatedOrderId] = useState(null);
+    const [createdBillId, setCreatedBillId] = useState(null);
+    const [isBookingConfirmModalOpen, setBookingConfirmModalOpen] = useState(false);
+    const [bookingConfirmModalStep, setBookingConfirmModalStep] = useState(1);
+    const [bookingConfirming, setBookingConfirming] = useState(false);
+    const [bookingConfirmError, setBookingConfirmError] = useState(null);
+    const [bookingErrorCountdown, setBookingErrorCountdown] = useState(null); // null = không đếm; 5→1 = đang đếm
 
     // Points Payment states
     const { user, fetchUser } = useAuthContext();
@@ -68,7 +73,6 @@ const BookingsPage = () => {
             try {
                 const session = JSON.parse(savedSession);
                 if (session.stage === 'payment') {
-                    setCheckoutStage('payment');
                     setWizardStep(5);
                     if (session.bookingDate) setBookingDate(session.bookingDate);
                     if (session.startH) setStartH(session.startH);
@@ -84,6 +88,26 @@ const BookingsPage = () => {
                         setBookingCart(session.bookingCart);
                         localStorage.setItem('booking_cart', JSON.stringify(session.bookingCart));
                     }
+                    // Nếu trước đó app đã redirect sang VNPay nhưng người dùng quay lại (browser back),
+                    // thì xóa order pending để tránh rác và ghi nhận hành vi huỷ.
+                    // Xóa Order sẽ cascade xóa Bill + BookingTable liên quan (FK onDelete cascade).
+                    const vnpayFlag = sessionStorage.getItem('vnpay_pending');
+                    const hasPaymentQuery = window.location.search && (window.location.search.includes('status') || window.location.search.includes('vnp_ResponseCode') || window.location.search.includes('vnpay'));
+                    if (vnpayFlag === '1' && session.orderId && !hasPaymentQuery) {
+                        (async () => {
+                            try {
+                                await orderService.deleteOrder(session.orderId);
+                            } catch (e) {
+                                console.warn('Failed to delete pending order after VNPay back navigation', e);
+                            }
+                            sessionStorage.removeItem(BOOKING_SESSION_KEY);
+                            sessionStorage.removeItem('vnpay_pending');
+                            setCreatedOrderId(null);
+                            setBookingCart([]);
+                            localStorage.removeItem('booking_cart');
+                            setWizardStep(1);
+                        })();
+                    }
                 }
             } catch (e) {
                 sessionStorage.removeItem(BOOKING_SESSION_KEY);
@@ -94,6 +118,26 @@ const BookingsPage = () => {
             setBookingDate(today);
         }
     }, []);
+
+    useEffect(() => {
+        if (!error) return;
+        const timer = setTimeout(() => setError(null), 4000);
+        return () => clearTimeout(timer);
+    }, [error]);
+
+    // Đếm ngược 5s→1s rồi tự redirect. Chạy độc lập với việc modal có đang hiển thị hay không,
+    // nên kể cả lỡ đóng modal bằng cách khác thì việc reset vẫn xảy ra đúng hẹn.
+    useEffect(() => {
+        if (bookingErrorCountdown === null) return;
+        if (bookingErrorCountdown === 0) {
+            handleBookingErrorRedirect();
+            return;
+        }
+        const timer = setTimeout(() => {
+            setBookingErrorCountdown((prev) => (prev !== null ? prev - 1 : null));
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [bookingErrorCountdown]);
 
     const cartTotal = bookingCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
@@ -153,46 +197,192 @@ const BookingsPage = () => {
             }
             setWizardStep(5);
         } else if (wizardStep === 5) {
+            // Before opening confirmation modal, check overlap one more time
             try {
-                const orderData = {
-                    order_type: 'booking_table',
-                    booking_table: {
-                        tables: selectedTables,
-                        start_date: bookingDate,
-                        start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
-                        end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
-                    },
-                    items: bookingCart.map(item => ({
-                        dish_id: item.dish_id,
-                        quantity: item.quantity,
-                    })),
-                };
-                const orderRes = await orderService.storeOrder(orderData);
-                const orderId = orderRes.data.data.order_id;
-                setCreatedOrderId(orderId);
-
-                // Lưu toàn bộ trạng thái vào sessionStorage để khóa
-                saveCheckoutSession('payment', {
-                    bookingDate,
-                    startH,
-                    startM,
-                    endH,
-                    endM,
-                    totalTables,
-                    tableTypes,
-                    selectedTables,
-                    orderId,
+                await bookingService.checkOverlap({
+                    date: bookingDate,
+                    start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
+                    end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`,
+                    tables: selectedTables
                 });
-                setCheckoutStage('payment');
-            } catch (err) {
-                setError(err.response?.data?.message || 'Lỗi tạo đơn hàng');
+            } catch (conflictErr) {
+                alert(conflictErr.response?.data?.message || 'Bàn bạn chọn đã bị chiếm dụng. Vui lòng đặt lại.');
+                return;
             }
+
+            setBookingConfirmModalOpen(true);
+            setBookingConfirmModalStep(1);
+            setBookingConfirmError(null);
         }
     };
 
     const handlePrevStep = () => {
         if (wizardStep > 1) {
             setWizardStep(wizardStep - 1);
+        }
+    };
+
+    const handleConfirmBookingModal = async () => {
+        setBookingConfirming(true);
+        setBookingConfirmError(null);
+
+        try {
+            // Kiểm tra overlap một lần nữa ngay trước khi tạo bill để tránh race-condition
+            try {
+                await bookingService.checkOverlap({
+                    date: bookingDate,
+                    start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
+                    end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`,
+                    tables: selectedTables
+                });
+            } catch (conflictErr) {
+                setBookingConfirmError(conflictErr.response?.data?.message || 'Bàn bạn chọn đã bị chiếm dụng. Vui lòng đặt lại.');
+                setBookingErrorCountdown(5);
+                setBookingConfirming(false);
+                return;
+            }
+
+            const orderData = {
+                order_type: 'booking_table',
+                booking_table: {
+                    tables: selectedTables,
+                    start_date: bookingDate,
+                    start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
+                    end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
+                },
+                items: bookingCart.map(item => ({
+                    dish_id: item.dish_id,
+                    quantity: item.quantity,
+                })),
+            };
+
+            // Gọi DUY NHẤT billService.storeBill — tạo Order + BookingTable + Bill trong 1 transaction
+            const billRes = await billService.storeBill(orderData);
+            const { bill_id, order_id } = billRes.data.data;
+
+            setCreatedOrderId(order_id);
+            setCreatedBillId(bill_id);
+
+            saveCheckoutSession('payment', {
+                bookingDate,
+                startH,
+                startM,
+                endH,
+                endM,
+                totalTables,
+                tableTypes,
+                selectedTables,
+                orderId: order_id,
+            });
+
+            setBookingConfirmModalStep(2);
+        } catch (err) {
+            setBookingConfirmError(err.response?.data?.message || 'Lỗi xác nhận đặt bàn. Vui lòng thử lại.');
+            setBookingErrorCountdown(5);
+        } finally {
+            setBookingConfirming(false);
+        }
+    };
+
+    const handleCloseBookingConfirmModal = () => {
+        setBookingConfirmModalOpen(false);
+        setBookingConfirmModalStep(1);
+        setBookingConfirmError(null);
+        setBookingConfirming(false);
+        setPayingWith(null);
+    };
+
+    // Dùng chung cho cả lúc hết 5s tự động lẫn lúc user bấm nút "Chuyển hướng"
+    const handleBookingErrorRedirect = () => {
+        setBookingConfirmModalOpen(false);
+        setBookingConfirmModalStep(1);
+        setBookingConfirmError(null);
+        setBookingErrorCountdown(null);
+        setPayingWith(null);
+
+        clearCheckoutSession();
+        setWizardStep(1);
+        setCreatedOrderId(null);
+        setCreatedBillId(null);
+        setSelectedTables([]);
+        setTotalTables(1);
+        setTableTypes({ type5: 1, type10: 0, type15: 0 });
+    };
+
+    // Đóng modal sau khi Bill đã được tạo (bước 2) = coi như hủy thanh toán.
+    // Xóa Order sẽ cascade xóa Bill + BookingTable liên quan (FK onDelete cascade),
+    // nên chỉ cần gọi 1 lệnh xóa duy nhất.
+    const handleClosePaymentModal = async () => {
+        setBookingConfirmModalOpen(false);
+        setBookingConfirmModalStep(1);
+        setBookingConfirmError(null);
+        setBookingConfirming(false);
+        setPayingWith(null);
+
+        if (createdOrderId) {
+            try {
+                await orderService.deleteOrder(createdOrderId);
+            } catch (err) {
+                console.warn('Không thể xóa đơn khi huỷ thanh toán:', err);
+            }
+        }
+
+        clearCheckoutSession();
+        setWizardStep(1);
+        setCreatedOrderId(null);
+        setCreatedBillId(null);
+        setSelectedTables([]);
+        setTotalTables(1);
+        setTableTypes({ type5: 1, type10: 0, type15: 0 });
+    };
+
+    // Bấm ra ngoài modal không còn tác dụng gì cả — chỉ có thể thoát bằng các nút bên trong modal.
+    const handleBackdropClick = () => { };
+
+    const handleVnpayPayment = async () => {
+        if (payingWith) return;
+        if (!createdOrderId) {
+            setBookingConfirmError('Không tìm thấy đơn hàng để thanh toán. Vui lòng thử lại.');
+            return;
+        }
+
+        setPayingWith('vnpay');
+        try {
+            // Đánh dấu VNPay pending để phát hiện nếu người dùng quay lại (browser back)
+            sessionStorage.setItem('vnpay_pending', '1');
+            const vnpayRes = await vnpayService.createPaymentUrl({
+                order_id: createdOrderId,
+                amount: cartTotal,
+                order_type: 'booking_table',
+            });
+            window.location.href = vnpayRes.data.payment_url;
+        } catch (err) {
+            setBookingConfirmError(err.response?.data?.message || 'Lỗi khởi tạo VNPay.');
+            setPayingWith(null);
+        }
+    };
+
+    const handlePointsPaymentClick = async () => {
+        if (!createdOrderId) {
+            setBookingConfirmError('Không tìm thấy đơn hàng để thanh toán. Vui lòng thử lại.');
+            return;
+        }
+
+        try {
+            const res = await userAPI.getProfile();
+            const freshPoints = res.data?.data?.points || 0;
+            setCurrentPoints(freshPoints);
+
+            const needed = Math.floor(cartTotal / 100);
+            setPointsNeeded(needed);
+
+            if (freshPoints < needed) {
+                setPointsModalType('insufficient');
+            } else {
+                setPointsModalType('confirm');
+            }
+        } catch (err) {
+            setBookingConfirmError('Không thể lấy thông tin điểm: ' + (err.response?.data?.message || err.message));
         }
     };
 
@@ -210,21 +400,48 @@ const BookingsPage = () => {
         });
     };
 
-    const handleCartQuantityChange = (idx, amount) => {
-        setBookingCart(prev => {
-            const updated = prev
-                .map((item, i) => {
-                    if (i !== idx) return item;
-                    const newQty = item.quantity + amount;
-                    if (newQty < 0) return item; // không cho âm
-                    return { ...item, quantity: newQty };
-                })
-                .filter(item => item.quantity > 0); // tự xóa món khi về 0
+    // Giảm số lượng món trong giỏ. Nếu giỏ về rỗng, coi như hủy sạch:
+    // - Nếu đã có Order/Bill (createdOrderId) → xóa Order (cascade xóa Bill + BookingTable), im lặng không alert.
+    // - Reset toàn bộ wizard về bước 1, xóa session, để lần thêm món tiếp theo là làm lại từ đầu.
+    const handleCartQuantityChange = async (idx, amount) => {
+        const updated = bookingCart
+            .map((item, i) => {
+                if (i !== idx) return item;
+                const newQty = item.quantity + amount;
+                if (newQty < 0) return item;
+                return { ...item, quantity: newQty };
+            })
+            .filter(item => item.quantity > 0);
 
-            localStorage.setItem('booking_cart', JSON.stringify(updated));
-            return updated;
-        });
+        localStorage.setItem('booking_cart', JSON.stringify(updated));
+        setBookingCart(updated);
+
+        if (updated.length === 0) {
+            if (createdOrderId) {
+                try {
+                    await orderService.deleteOrder(createdOrderId);
+                } catch (err) {
+                    console.warn('Không thể xóa đơn khi giỏ hàng trống:', err);
+                }
+            }
+
+            clearCheckoutSession();
+            setWizardStep(1);
+            setCreatedOrderId(null);
+            setCreatedBillId(null);
+            setSelectedTables([]);
+            setTotalTables(1);
+            setTableTypes({ type5: 1, type10: 0, type15: 0 });
+        }
     };
+
+    const getTableType = (num) => {
+        if (num <= 25) return 'type5';
+        if (num <= 45) return 'type10';
+        return 'type15';
+    };
+
+    const tableTypeLabels = { type5: 'nhỏ', type10: 'vừa', type15: 'lớn' };
 
     const handleTableSelect = async (tableNum) => {
         if (selectedTables.includes(tableNum)) {
@@ -235,6 +452,13 @@ const BookingsPage = () => {
                 return;
             }
 
+            const type = getTableType(tableNum);
+            const selectedOfType = selectedTables.filter(t => getTableType(t) === type).length;
+            if (selectedOfType >= tableTypes[type]) {
+                setError(`Bạn chỉ được chọn tối đa ${tableTypes[type]} bàn loại ${tableTypeLabels[type]}.`);
+                return;
+            }
+
             try {
                 await bookingService.checkOverlap({
                     date: bookingDate,
@@ -242,56 +466,10 @@ const BookingsPage = () => {
                     end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`,
                     tables: [tableNum]
                 });
-                setSelectedTables([...selectedTables, tableNum]);
+                setSelectedTables([...selectedTables, tableNum].sort((a, b) => a - b));
             } catch (err) {
                 setError(err.response?.data?.message || `Bàn số ${tableNum} đã có người đặt trong khung giờ này.`);
             }
-        }
-    };
-
-    const handlePayment = async () => {
-        if (payingWith) return; // chặn double-click
-        setPayingWith('vnpay');
-
-        try {
-            // 1. Lấy URL thanh toán VNPay
-            const vnpayRes = await vnpayService.createPaymentUrl({
-                order_id: createdOrderId,
-                amount: cartTotal,
-                order_type: 'booking_table',
-            });
-
-            // 🔑 ĐỔI: Không xóa session! 
-            // Session sẽ được xóa khi thanh toán thành công (ở PaymentResultPage)
-            // Nếu user quay lại, session vẫn còn → restore form data
-            // (clearCheckoutSession() removed)
-            
-            // 2. Redirect sang VNPay
-            window.location.href = vnpayRes.data.payment_url;
-
-        } catch (err) {
-            setError(err.response?.data?.message || 'Lỗi đặt bàn');
-            setPayingWith(null);
-        }
-    };
-
-    const handlePointsPaymentClick = async () => {
-        try {
-            // Lấy điểm mới nhất từ server thay vì cache ở AuthContext (localStorage)
-            const res = await userAPI.getProfile();
-            const freshPoints = res.data?.data?.points || 0;
-            setCurrentPoints(freshPoints);
-
-            const needed = Math.floor(cartTotal / 100);
-            setPointsNeeded(needed);
-
-            if (freshPoints < needed) {
-                setPointsModalType('insufficient');
-            } else {
-                setPointsModalType('confirm');
-            }
-        } catch (err) {
-            setError('Không thể lấy thông tin điểm: ' + (err.response?.data?.message || err.message));
         }
     };
 
@@ -299,6 +477,43 @@ const BookingsPage = () => {
         if (payingWith) return; // chặn double-click
         setPayingWith('points');
         try {
+            // Trước khi thanh toán bằng điểm, kiểm tra lại bàn
+            try {
+                await bookingService.checkOverlap({
+                    date: bookingDate,
+                    start_time: `${String(startH).padStart(2, '0')}:${String(startM).padStart(2, '0')}`,
+                    end_time: `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`,
+                    tables: selectedTables,
+                    order_id: createdOrderId
+                });
+            } catch (conflictErr) {
+                alert(conflictErr.response?.data?.message || 'Bàn bạn chọn đã bị chiếm dụng. Vui lòng đặt lại.');
+
+                // Bàn đã bị người khác lấy → order cũ không còn dùng được, xóa luôn
+                // (cascade xóa Bill + BookingTable liên quan)
+                if (createdOrderId) {
+                    try {
+                        await orderService.deleteOrder(createdOrderId);
+                    } catch (delErr) {
+                        console.warn('Không thể xóa đơn sau khi phát hiện conflict:', delErr);
+                    }
+                }
+
+                setBookingConfirmModalOpen(false);
+                setBookingConfirmModalStep(1);
+                setBookingConfirmError(null);
+                setPointsModalType(null);
+                clearCheckoutSession();
+                setWizardStep(1);
+                setCreatedOrderId(null);
+                setCreatedBillId(null);
+                setSelectedTables([]);
+                setTotalTables(1);
+                setTableTypes({ type5: 1, type10: 0, type15: 0 });
+                setPayingWith(null);
+                return;
+            }
+
             // 2. Thanh toán bằng điểm
             const res = await orderService.payWithPoints(createdOrderId);
             const billId = res.data.data.bill_id;
@@ -437,272 +652,343 @@ const BookingsPage = () => {
                                     </tfoot>
                                 </table>
                                 <button
-                                    onClick={() => { localStorage.removeItem('booking_cart'); setBookingCart([]); }}
+                                    onClick={async () => {
+                                        const ok = window.confirm('Bạn có chắc muốn xóa đơn hàng? Hành động này sẽ xóa toàn bộ món, đơn và thông tin đặt bàn.');
+                                        if (!ok) return;
+
+                                        // Nếu đã tạo order trên server, xóa order (cascades booking_table, order_items, bills)
+                                        if (createdOrderId) {
+                                            try {
+                                                await orderService.deleteOrder(createdOrderId);
+                                            } catch (err) {
+                                                setError(err.response?.data?.message || 'Lỗi khi xóa đơn hàng');
+                                                return;
+                                            }
+                                        }
+
+                                        // Dọn local state/session
+                                        localStorage.removeItem('booking_cart');
+                                        clearCheckoutSession();
+                                        setBookingCart([]);
+                                        setCreatedOrderId(null);
+                                        setCreatedBillId(null);
+                                        setSelectedTables([]);
+                                        setTotalTables(1);
+                                        setTableTypes({ type5: 1, type10: 0, type15: 0 });
+                                        setWizardStep(1);
+                                    }}
                                     className="mt-4 px-4 py-2 text-sm font-bold rounded border-2 border-red-600 text-red-600 bg-white hover:bg-red-600 hover:text-white transition"
                                 >
-                                    Xóa tất cả món
+                                    Xóa đơn hàng
                                 </button>
                             </div>
 
                             <div>
-                                {checkoutStage === 'wizard' ? (
-                                    <div className="border-2 border-red-600 rounded-lg p-4 bg-white">
-                                        <div className="flex justify-between mb-6 relative">
-                                            <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-200 -z-10 -translate-y-1/2"></div>
-                                            {[1, 2, 3, 4, 5].map(step => (
-                                                <div key={step} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${wizardStep === step ? 'bg-red-600 text-white border-2 border-red-600' : wizardStep > step ? 'bg-red-200 text-red-800 border-2 border-red-200' : 'bg-white text-gray-400 border-2 border-gray-200'}`}>
-                                                    {step}
-                                                </div>
-                                            ))}
-                                        </div>
+                                <div className="border-2 border-red-600 rounded-lg p-4 bg-white">
+                                    <div className="flex justify-between mb-6 relative">
+                                        <div className="absolute top-1/2 left-0 w-full h-1 bg-gray-200 -z-10 -translate-y-1/2"></div>
+                                        {[1, 2, 3, 4, 5].map(step => (
+                                            <div key={step} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${wizardStep === step ? 'bg-red-600 text-white border-2 border-red-600' : wizardStep > step ? 'bg-red-200 text-red-800 border-2 border-red-200' : 'bg-white text-gray-400 border-2 border-gray-200'}`}>
+                                                {step}
+                                            </div>
+                                        ))}
+                                    </div>
 
-                                        {/* Step 1: Date & Time */}
-                                        {wizardStep === 1 && (
-                                            <div className="animate-fade-in">
-                                                <h3 className="font-bold text-lg text-red-600 mb-2">Bước 1: Ngày & Giờ</h3>
-                                                <p className="text-gray-600 mb-4 text-sm">Giờ hoạt động: 07:00 - 22:00. <strong className="text-red-600">Lưu ý chỉ được đặt bàn tối đa 90'.</strong></p>
-                                                <div className="space-y-4 mb-6">
+                                    {/* Step 1: Date & Time */}
+                                    {wizardStep === 1 && (
+                                        <div className="animate-fade-in">
+                                            <h3 className="font-bold text-lg text-red-600 mb-2">Bước 1: Ngày & Giờ</h3>
+                                            <p className="text-gray-600 mb-4 text-sm">Giờ hoạt động: 07:00 - 22:00. <strong className="text-red-600">Lưu ý chỉ được đặt bàn tối đa 90'.</strong></p>
+                                            <div className="space-y-4 mb-6">
+                                                <div>
+                                                    <label className="block text-sm font-semibold mb-1">Ngày đặt</label>
+                                                    <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full border p-2 rounded" />
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
                                                     <div>
-                                                        <label className="block text-sm font-semibold mb-1">Ngày đặt</label>
-                                                        <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full border p-2 rounded" />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div>
-                                                            <label className="block text-sm font-semibold mb-1">Giờ đến</label>
-                                                            <div className="flex items-center gap-1 border p-2 rounded bg-white w-fit focus-within:ring-2 focus-within:ring-red-500">
-                                                                <input type="text" maxLength="2" placeholder="07" value={startH} onChange={e => setStartH(e.target.value)} className="w-10 text-center outline-none bg-transparent" />
-                                                                <span className="font-bold text-gray-500">:</span>
-                                                                <input type="text" maxLength="2" placeholder="00" value={startM} onChange={e => setStartM(e.target.value)} className="w-10 text-center outline-none bg-transparent" />
-                                                            </div>
+                                                        <label className="block text-sm font-semibold mb-1">Giờ đến</label>
+                                                        <div className="flex items-center gap-1 border p-2 rounded bg-white w-fit focus-within:ring-2 focus-within:ring-red-500">
+                                                            <input type="text" maxLength="2" placeholder="07" value={startH} onChange={e => setStartH(e.target.value)} className="w-10 text-center outline-none bg-transparent" />
+                                                            <span className="font-bold text-gray-500">:</span>
+                                                            <input type="text" maxLength="2" placeholder="00" value={startM} onChange={e => setStartM(e.target.value)} className="w-10 text-center outline-none bg-transparent" />
                                                         </div>
-                                                        <div>
-                                                            <label className="block text-sm font-semibold mb-1">Giờ về</label>
-                                                            <div className="flex items-center gap-1 border p-2 rounded bg-white w-fit focus-within:ring-2 focus-within:ring-red-500">
-                                                                <input type="text" maxLength="2" placeholder="08" value={endH} onChange={e => setEndH(e.target.value)} className="w-10 text-center outline-none bg-transparent" />
-                                                                <span className="font-bold text-gray-500">:</span>
-                                                                <input type="text" maxLength="2" placeholder="30" value={endM} onChange={e => setEndM(e.target.value)} className="w-10 text-center outline-none bg-transparent" />
-                                                            </div>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-semibold mb-1">Giờ về</label>
+                                                        <div className="flex items-center gap-1 border p-2 rounded bg-white w-fit focus-within:ring-2 focus-within:ring-red-500">
+                                                            <input type="text" maxLength="2" placeholder="08" value={endH} onChange={e => setEndH(e.target.value)} className="w-10 text-center outline-none bg-transparent" />
+                                                            <span className="font-bold text-gray-500">:</span>
+                                                            <input type="text" maxLength="2" placeholder="30" value={endM} onChange={e => setEndM(e.target.value)} className="w-10 text-center outline-none bg-transparent" />
                                                         </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                        )}
+                                        </div>
+                                    )}
 
-                                        {/* Step 2: Total Tables */}
-                                        {wizardStep === 2 && (
-                                            <div className="animate-fade-in">
-                                                <h3 className="font-bold text-lg text-red-600 mb-2">Bước 2: Số lượng bàn</h3>
-                                                <p className="text-gray-600 mb-4 text-sm">Bạn muốn đặt bao nhiêu bàn? (Tối đa 3 bàn)</p>
-                                                <div className="flex justify-center gap-4 mb-6">
-                                                    {[1, 2, 3].map(num => (
+                                    {/* Step 2: Total Tables */}
+                                    {wizardStep === 2 && (
+                                        <div className="animate-fade-in">
+                                            <h3 className="font-bold text-lg text-red-600 mb-2">Bước 2: Số lượng bàn</h3>
+                                            <p className="text-gray-600 mb-4 text-sm">Bạn muốn đặt bao nhiêu bàn? (Tối đa 3 bàn)</p>
+                                            <div className="flex justify-center gap-4 mb-6">
+                                                {[1, 2, 3].map(num => (
+                                                    <button
+                                                        key={num}
+                                                        onClick={() => {
+                                                            setTotalTables(num);
+                                                            if (num === 1) setTableTypes({ type5: 1, type10: 0, type15: 0 });
+                                                            if (num === 2) setTableTypes({ type5: 2, type10: 0, type15: 0 });
+                                                            if (num === 3) setTableTypes({ type5: 3, type10: 0, type15: 0 });
+                                                            setSelectedTables([]); // reset bàn đã chọn vì tổng số bàn vừa thay đổi
+                                                        }}
+                                                        className={`w-16 h-16 text-2xl font-bold rounded-lg border-2 ${totalTables === num ? 'border-red-600 text-red-600 bg-red-50' : 'border-gray-200 text-gray-400 hover:border-red-300'}`}
+                                                    >
+                                                        {num}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Step 3: Table Types */}
+                                    {wizardStep === 3 && (
+                                        <div className="animate-fade-in">
+                                            <h3 className="font-bold text-lg text-red-600 mb-2">Bước 3: Loại bàn</h3>
+                                            <p className="text-gray-600 mb-4 text-sm">Phân bổ số lượng theo sức chứa. Tổng: <b>{totalTables}</b> bàn.</p>
+
+                                            <div className="space-y-3 mb-6">
+                                                <div className="flex justify-between items-center bg-white p-3 border rounded-lg">
+                                                    <div>
+                                                        <div className="font-bold">Bàn nhỏ (&lt;= 5 người)</div>
+                                                        <div className="text-xs text-gray-500">STT từ 1 - 25</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <button onClick={() => handleTableTypeChange('type5', -1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">-</button>
+                                                        <span className="font-bold w-4 text-center">{tableTypes.type5}</span>
+                                                        <button onClick={() => handleTableTypeChange('type5', 1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">+</button>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-white p-3 border rounded-lg">
+                                                    <div>
+                                                        <div className="font-bold">Bàn vừa (&lt;= 10 người)</div>
+                                                        <div className="text-xs text-gray-500">STT từ 26 - 45</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <button onClick={() => handleTableTypeChange('type10', -1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">-</button>
+                                                        <span className="font-bold w-4 text-center">{tableTypes.type10}</span>
+                                                        <button onClick={() => handleTableTypeChange('type10', 1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">+</button>
+                                                    </div>
+                                                </div>
+                                                <div className="flex justify-between items-center bg-white p-3 border rounded-lg">
+                                                    <div>
+                                                        <div className="font-bold">Bàn lớn (&lt;= 15 người)</div>
+                                                        <div className="text-xs text-gray-500">STT từ 46 - 50</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <button onClick={() => handleTableTypeChange('type15', -1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">-</button>
+                                                        <span className="font-bold w-4 text-center">{tableTypes.type15}</span>
+                                                        <button onClick={() => handleTableTypeChange('type15', 1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">+</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Step 4: Select Tables */}
+                                    {wizardStep === 4 && (
+                                        <div className="animate-fade-in">
+                                            <h3 className="font-bold text-lg text-red-600 mb-2">Bước 4: Chọn bàn trống</h3>
+                                            <p className="text-gray-600 mb-2 text-sm">Vui lòng chọn <b>{totalTables}</b> bàn. Đã chọn {selectedTables.length}/{totalTables}.</p>
+
+                                            <div className="max-h-60 overflow-y-auto border p-2 bg-white rounded">
+                                                {tableTypes.type5 > 0 && (
+                                                    <div className="mb-4">
+                                                        <div className="font-bold text-sm mb-2 text-gray-700 border-b pb-1">Bàn nhỏ (1-25) - Cần chọn {tableTypes.type5} bàn</div>
+                                                        <div className="grid grid-cols-5 gap-2">
+                                                            {Array.from({ length: 25 }, (_, i) => i + 1).map(num => (
+                                                                <button
+                                                                    key={num}
+                                                                    onClick={() => handleTableSelect(num)}
+                                                                    className={`p-2 text-xs border rounded transition ${selectedTables.includes(num) ? 'bg-red-600 text-white border-red-600 font-bold' : 'bg-white hover:border-red-600'}`}
+                                                                >
+                                                                    {num}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {tableTypes.type10 > 0 && (
+                                                    <div className="mb-4">
+                                                        <div className="font-bold text-sm mb-2 text-gray-700 border-b pb-1">Bàn vừa (26-45) - Cần chọn {tableTypes.type10} bàn</div>
+                                                        <div className="grid grid-cols-5 gap-2">
+                                                            {Array.from({ length: 20 }, (_, i) => i + 26).map(num => (
+                                                                <button
+                                                                    key={num}
+                                                                    onClick={() => handleTableSelect(num)}
+                                                                    className={`p-2 text-xs border rounded transition ${selectedTables.includes(num) ? 'bg-red-600 text-white border-red-600 font-bold' : 'bg-white hover:border-red-600'}`}
+                                                                >
+                                                                    {num}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {tableTypes.type15 > 0 && (
+                                                    <div className="mb-4">
+                                                        <div className="font-bold text-sm mb-2 text-gray-700 border-b pb-1">Bàn lớn (46-50) - Cần chọn {tableTypes.type15} bàn</div>
+                                                        <div className="grid grid-cols-5 gap-2">
+                                                            {Array.from({ length: 5 }, (_, i) => i + 46).map(num => (
+                                                                <button
+                                                                    key={num}
+                                                                    onClick={() => handleTableSelect(num)}
+                                                                    className={`p-2 text-xs border rounded transition ${selectedTables.includes(num) ? 'bg-red-600 text-white border-red-600 font-bold' : 'bg-white hover:border-red-600'}`}
+                                                                >
+                                                                    {num}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Step 5: Confirm */}
+                                    {wizardStep === 5 && (
+                                        <div className="animate-fade-in">
+                                            <h3 className="font-bold text-lg text-red-600 mb-2">Bước 5: Xác nhận & Thanh toán</h3>
+                                            <div className="bg-white p-4 border rounded-lg mb-6 text-sm space-y-2">
+                                                <div className="flex justify-between border-b pb-2">
+                                                    <span className="text-gray-600">Ngày đặt:</span>
+                                                    <span className="font-bold">{bookingDate}</span>
+                                                </div>
+                                                <div className="flex justify-between border-b pb-2">
+                                                    <span className="text-gray-600">Thời gian:</span>
+                                                    <span className="font-bold">{String(startH).padStart(2, '0')}:{String(startM).padStart(2, '0')} - {String(endH).padStart(2, '0')}:{String(endM).padStart(2, '0')}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-600">Bàn đã chọn:</span>
+                                                    <span className="font-bold text-red-600">Bàn {selectedTables.join(', ')}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between mt-4 border-t pt-4">
+                                        <button
+                                            onClick={handlePrevStep}
+                                            className={`px-4 py-2 rounded border border-black text-black bg-white text-sm font-semibold ${wizardStep === 1 ? 'invisible' : ''}`}
+                                        >
+                                            Quay lại
+                                        </button>
+                                        <button
+                                            onClick={handleNextStep}
+                                            className="bg-red-600 text-white px-6 py-2 rounded font-bold hover:bg-red-700"
+                                        >
+                                            {wizardStep === 5 ? 'Xác nhận đặt bàn và thanh toán ngay' : 'Tiếp tục'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {isBookingConfirmModalOpen && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={handleBackdropClick}>
+                            <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+                                <div className="bg-red-600 text-white px-6 py-4 flex items-center justify-between">
+                                    <div>
+                                        <div className="text-lg font-bold">Xác nhận đặt bàn và thanh toán</div>
+                                    </div>
+                                </div>
+
+                                <div className="p-6">
+                                    {bookingConfirmModalStep === 1 ? (
+                                        <>
+                                            <div className="mb-4">
+                                                <p className="text-gray-700">Bạn có chắc muốn xác nhận thông tin đặt bàn và thanh toán ngay không?</p>
+                                            </div>
+                                            <div className="mb-4 text-sm text-gray-600 bg-yellow-50 border border-yellow-200 p-4 rounded">
+                                                Nếu quá trình thanh toán bị ngắt quãng, đơn hàng của bạn sẽ bị hủy bỏ.
+                                            </div>
+                                            {bookingConfirmError && (
+                                                <div className="mb-4 text-base font-semibold text-red-700 bg-red-100 border border-red-200 p-3 rounded">
+                                                    {bookingConfirmError}
+                                                    {bookingErrorCountdown !== null && (
+                                                        <div className="text-sm font-normal mt-1">
+                                                            Tự động quay lại sau {bookingErrorCountdown}s...
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                            <div className="flex justify-end gap-3">
+                                                {bookingErrorCountdown !== null ? (
+                                                    <button
+                                                        onClick={handleBookingErrorRedirect}
+                                                        className="px-5 py-2 rounded bg-red-600 text-white font-bold hover:bg-red-700"
+                                                    >
+                                                        Chuyển hướng về trang đặt bàn
+                                                    </button>
+                                                ) : (
+                                                    <>
                                                         <button
-                                                            key={num}
-                                                            onClick={() => {
-                                                                setTotalTables(num);
-                                                                if (num === 1) setTableTypes({ type5: 1, type10: 0, type15: 0 });
-                                                                if (num === 2) setTableTypes({ type5: 2, type10: 0, type15: 0 });
-                                                                if (num === 3) setTableTypes({ type5: 3, type10: 0, type15: 0 });
-                                                                setSelectedTables([]); // reset bàn đã chọn vì tổng số bàn vừa thay đổi
-                                                            }}
-                                                            className={`w-16 h-16 text-2xl font-bold rounded-lg border-2 ${totalTables === num ? 'border-red-600 text-red-600 bg-red-50' : 'border-gray-200 text-gray-400 hover:border-red-300'}`}
+                                                            onClick={handleCloseBookingConfirmModal}
+                                                            className="px-4 py-2 rounded border border-black text-black bg-white text-sm font-semibold"
                                                         >
-                                                            {num}
+                                                            Quay lại
                                                         </button>
-                                                    ))}
-                                                </div>
+                                                        <button
+                                                            onClick={handleConfirmBookingModal}
+                                                            className="px-5 py-2 rounded bg-red-600 text-white font-bold hover:bg-red-700 disabled:opacity-50"
+                                                            disabled={bookingConfirming}
+                                                        >
+                                                            {bookingConfirming ? 'Đang xác nhận...' : 'Xác nhận và tiếp tục'}
+                                                        </button>
+                                                    </>
+                                                )}
                                             </div>
-                                        )}
-
-                                        {/* Step 3: Table Types */}
-                                        {wizardStep === 3 && (
-                                            <div className="animate-fade-in">
-                                                <h3 className="font-bold text-lg text-red-600 mb-2">Bước 3: Loại bàn</h3>
-                                                <p className="text-gray-600 mb-4 text-sm">Phân bổ số lượng theo sức chứa. Tổng: <b>{totalTables}</b> bàn.</p>
-
-                                                <div className="space-y-3 mb-6">
-                                                    <div className="flex justify-between items-center bg-white p-3 border rounded-lg">
-                                                        <div>
-                                                            <div className="font-bold">Bàn nhỏ (&lt;= 5 người)</div>
-                                                            <div className="text-xs text-gray-500">STT từ 1 - 25</div>
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <button onClick={() => handleTableTypeChange('type5', -1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">-</button>
-                                                            <span className="font-bold w-4 text-center">{tableTypes.type5}</span>
-                                                            <button onClick={() => handleTableTypeChange('type5', 1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">+</button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex justify-between items-center bg-white p-3 border rounded-lg">
-                                                        <div>
-                                                            <div className="font-bold">Bàn vừa (&lt;= 10 người)</div>
-                                                            <div className="text-xs text-gray-500">STT từ 26 - 45</div>
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <button onClick={() => handleTableTypeChange('type10', -1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">-</button>
-                                                            <span className="font-bold w-4 text-center">{tableTypes.type10}</span>
-                                                            <button onClick={() => handleTableTypeChange('type10', 1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">+</button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex justify-between items-center bg-white p-3 border rounded-lg">
-                                                        <div>
-                                                            <div className="font-bold">Bàn lớn (&lt;= 15 người)</div>
-                                                            <div className="text-xs text-gray-500">STT từ 46 - 50</div>
-                                                        </div>
-                                                        <div className="flex items-center gap-3">
-                                                            <button onClick={() => handleTableTypeChange('type15', -1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">-</button>
-                                                            <span className="font-bold w-4 text-center">{tableTypes.type15}</span>
-                                                            <button onClick={() => handleTableTypeChange('type15', 1)} className="w-8 h-8 rounded-full border border-red-600 text-red-600 font-bold">+</button>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="mb-4 text-gray-700">
+                                                <p className="font-semibold mb-2">Chọn phương thức thanh toán</p>
+                                                <p className="text-sm text-gray-500">Mọi thông tin đặt bàn đã được chốt. Nếu đóng modal, đơn sẽ bị hủy.</p>
                                             </div>
-                                        )}
-
-                                        {/* Step 4: Select Tables */}
-                                        {wizardStep === 4 && (
-                                            <div className="animate-fade-in">
-                                                <h3 className="font-bold text-lg text-red-600 mb-2">Bước 4: Chọn bàn trống</h3>
-                                                <p className="text-gray-600 mb-2 text-sm">Vui lòng chọn <b>{totalTables}</b> bàn. Đã chọn {selectedTables.length}/{totalTables}.</p>
-
-                                                <div className="max-h-60 overflow-y-auto border p-2 bg-white rounded">
-                                                    {tableTypes.type5 > 0 && (
-                                                        <div className="mb-4">
-                                                            <div className="font-bold text-sm mb-2 text-gray-700 border-b pb-1">Bàn nhỏ (1-25) - Cần chọn {tableTypes.type5} bàn</div>
-                                                            <div className="grid grid-cols-5 gap-2">
-                                                                {Array.from({ length: 25 }, (_, i) => i + 1).map(num => (
-                                                                    <button
-                                                                        key={num}
-                                                                        onClick={() => handleTableSelect(num)}
-                                                                        className={`p-2 text-xs border rounded transition ${selectedTables.includes(num) ? 'bg-red-600 text-white border-red-600 font-bold' : 'bg-white hover:border-red-600'}`}
-                                                                    >
-                                                                        {num}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {tableTypes.type10 > 0 && (
-                                                        <div className="mb-4">
-                                                            <div className="font-bold text-sm mb-2 text-gray-700 border-b pb-1">Bàn vừa (26-45) - Cần chọn {tableTypes.type10} bàn</div>
-                                                            <div className="grid grid-cols-5 gap-2">
-                                                                {Array.from({ length: 20 }, (_, i) => i + 26).map(num => (
-                                                                    <button
-                                                                        key={num}
-                                                                        onClick={() => handleTableSelect(num)}
-                                                                        className={`p-2 text-xs border rounded transition ${selectedTables.includes(num) ? 'bg-red-600 text-white border-red-600 font-bold' : 'bg-white hover:border-red-600'}`}
-                                                                    >
-                                                                        {num}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {tableTypes.type15 > 0 && (
-                                                        <div className="mb-4">
-                                                            <div className="font-bold text-sm mb-2 text-gray-700 border-b pb-1">Bàn lớn (46-50) - Cần chọn {tableTypes.type15} bàn</div>
-                                                            <div className="grid grid-cols-5 gap-2">
-                                                                {Array.from({ length: 5 }, (_, i) => i + 46).map(num => (
-                                                                    <button
-                                                                        key={num}
-                                                                        onClick={() => handleTableSelect(num)}
-                                                                        className={`p-2 text-xs border rounded transition ${selectedTables.includes(num) ? 'bg-red-600 text-white border-red-600 font-bold' : 'bg-white hover:border-red-600'}`}
-                                                                    >
-                                                                        {num}
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
+                                            {bookingConfirmError && (
+                                                <div className="mb-4 text-sm text-red-700 bg-red-100 border border-red-200 p-3 rounded">
+                                                    {bookingConfirmError}
                                                 </div>
-                                            </div>
-                                        )}
-
-                                        {/* Step 5: Confirm */}
-                                        {wizardStep === 5 && (
-                                            <div className="animate-fade-in">
-                                                <h3 className="font-bold text-lg text-red-600 mb-2">Bước 5: Xác nhận & Thanh toán</h3>
-                                                <div className="bg-white p-4 border rounded-lg mb-6 text-sm space-y-2">
-                                                    <div className="flex justify-between border-b pb-2">
-                                                        <span className="text-gray-600">Ngày đặt:</span>
-                                                        <span className="font-bold">{bookingDate}</span>
-                                                    </div>
-                                                    <div className="flex justify-between border-b pb-2">
-                                                        <span className="text-gray-600">Thời gian:</span>
-                                                        <span className="font-bold">{String(startH).padStart(2, '0')}:{String(startM).padStart(2, '0')} - {String(endH).padStart(2, '0')}:{String(endM).padStart(2, '0')}</span>
-                                                    </div>
-                                                    <div className="flex justify-between">
-                                                        <span className="text-gray-600">Bàn đã chọn:</span>
-                                                        <span className="font-bold text-red-600">Bàn {selectedTables.join(', ')}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="flex justify-between mt-4 border-t pt-4">
-                                            <button
-                                                onClick={handlePrevStep}
-                                                className={`px-4 py-2 text-sm font-bold text-gray-600 hover:text-red-600 ${wizardStep === 1 ? 'invisible' : ''}`}
-                                            >
-                                                Quay lại
-                                            </button>
-                                            <button
-                                                onClick={handleNextStep}
-                                                className="bg-red-600 text-white px-6 py-2 rounded font-bold hover:bg-red-700"
-                                            >
-                                                {wizardStep === 5 ? 'Xác nhận thông tin đặt bàn' : 'Tiếp tục'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4 border rounded p-4 bg-gray-50">
-                                        <div className="text-center">
-                                            <h3 className="font-bold text-lg mb-2">Thanh toán đơn đặt bàn</h3>
-                                            <p className="text-gray-600 text-sm mb-4">Mọi thông tin đã được chốt. Vui lòng tiến hành thanh toán để hoàn tất.</p>
-                                        </div>
-                                        {/* Nút VNPay */}
-                                        <button
-                                            onClick={handlePayment}
-                                            disabled={!!payingWith}
-                                            className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 mb-3 ${payingWith === 'vnpay'
-                                                ? 'bg-blue-600 text-white cursor-not-allowed'
-                                                : payingWith === 'points'
-                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                                                }`}
-                                        >
-                                            {payingWith === 'vnpay' ? (
-                                                <><i className="fas fa-spinner fa-spin"></i> Đang xử lý...</>
-                                            ) : (
-                                                <><i className="fas fa-credit-card"></i> Thanh toán bằng VNPay</>
                                             )}
-                                        </button>
-                                        {/* Nút Điểm */}
-                                        <button
-                                            onClick={handlePointsPaymentClick}
-                                            disabled={!!payingWith}
-                                            className={`w-full font-bold py-3 rounded transition flex items-center justify-center gap-2 ${payingWith === 'points'
-                                                ? 'bg-green-600 text-white cursor-not-allowed'
-                                                : payingWith === 'vnpay'
-                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                    : 'bg-green-600 text-white hover:bg-green-700'
-                                                }`}
-                                        >
-                                            {payingWith === 'points' ? (
-                                                <><i className="fas fa-spinner fa-spin"></i> Đang xử lý...</>
-                                            ) : (
-                                                <><i className="fas fa-coins"></i> Thanh toán bằng Điểm</>
-                                            )}
-                                        </button>
-                                        <button
-                                            onClick={() => { clearCheckoutSession(); setCheckoutStage('wizard'); }}
-                                            disabled={!!payingWith}
-                                            className="w-full mt-2 text-gray-500 hover:text-red-600 text-sm font-bold py-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                                        >
-                                            Quay lại sửa thông tin
-                                        </button>
-                                    </div>
-                                )}
+                                            <div className="space-y-3 mb-6">
+                                                <button
+                                                    onClick={handleVnpayPayment}
+                                                    disabled={!!payingWith}
+                                                    className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded font-bold transition ${payingWith === 'vnpay' ? 'bg-blue-600 text-white cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                                                >
+                                                    {payingWith === 'vnpay' ? 'Đang chuyển tới VNPay...' : 'Thanh toán bằng VNPay'}
+                                                </button>
+                                                <button
+                                                    onClick={handlePointsPaymentClick}
+                                                    disabled={!!payingWith}
+                                                    className={`w-full flex items-center justify-center gap-2 px-5 py-3 rounded font-bold transition ${payingWith === 'points' ? 'bg-green-600 text-white cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}
+                                                >
+                                                    {payingWith === 'points' ? 'Đang xử lý...' : 'Thanh toán bằng Điểm'}
+                                                </button>
+                                            </div>
+                                            <div className="flex justify-end">
+                                                <button
+                                                    onClick={handleClosePaymentModal}
+                                                    className="px-4 py-2 rounded border border-black text-black bg-white text-sm font-semibold"
+                                                >
+                                                    Đóng
+                                                </button>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -784,7 +1070,7 @@ const BookingsPage = () => {
                         {formatted.map((bill, idx) => {
                             const booking = bill.booking_table;
                             return (
-                                <Card key={bill.bill_id || idx} title={`Đơn hàng ${bill.order_id || bill.bill_id || ''}`}>
+                                <Card key={bill.bill_id || idx} title={`Đơn hàng ${bill.order_stt || bill.order_id || bill.bill_id || ''} ngày ${bill.created_at ? new Date(bill.created_at).toLocaleDateString('vi-VN') : '—'}`}>
                                     <div className="grid md:grid-cols-4 gap-4 mb-4">
                                         <div>
                                             <p className="text-sm text-gray-600">Bàn</p>

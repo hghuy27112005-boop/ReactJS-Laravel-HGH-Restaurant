@@ -132,9 +132,11 @@ class VnpayController extends Controller
         $orderType = 'delivery'; // default
 
         if ($orderId) {
+            $order = Order::where('order_id', $orderId)->first();
+            $orderType = $order?->order_type ?? 'delivery';
             $bill = Bill::with('order')->where('order_id', $orderId)->latest()->first();
             $billId = $bill?->bill_id;
-            $orderType = $bill?->order?->order_type ?? 'delivery';
+            $orderType = $bill?->order?->order_type ?? $orderType;
         }
 
         $frontendUrl  = config('app.frontend_url', 'http://localhost:5173');
@@ -148,8 +150,11 @@ class VnpayController extends Controller
             'response_code' => $responseCode,
         ]);
 
+        // ALWAYS include order_id in redirect when available so frontend can poll
+        $orderIdParam = $orderId ? "&order_id={$orderId}" : '';
+
         return redirect()->away(
-            "{$frontendUrl}/payment-result?bill_id={$billId}&status={$status}&code={$responseCode}&order_type={$orderType}"
+            "{$frontendUrl}/payment-result?bill_id={$billId}&status={$status}&code={$responseCode}&order_type={$orderType}{$orderIdParam}"
         );
     }
 
@@ -163,6 +168,15 @@ class VnpayController extends Controller
      */
     public function vnpayIpn(Request $request)
     {
+        // Log raw IPN entry for diagnostics (query + headers)
+        Log::info('VNPay IPN entry', [
+            'full_url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'headers' => $request->headers->all(),
+            'query' => $request->query(),
+            'ip' => $request->ip(),
+        ]);
+
         $result = $this->verifyAndGetResult($request);
 
         if (!$result['is_valid_signature']) {
@@ -181,7 +195,7 @@ class VnpayController extends Controller
         }
 
         // Lấy order
-        $order = Order::with('user', 'delivery', 'booking')->where('order_id', $orderId)->first();
+        $order = Order::with('user', 'delivery', 'booking_table')->where('order_id', $orderId)->first();
 
         if (!$order) {
             Log::warning('VNPay IPN order not found', ['order_id' => $orderId]);
