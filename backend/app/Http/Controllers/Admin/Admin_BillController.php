@@ -36,10 +36,15 @@ class Admin_BillController extends Controller
         }
 
         // Filter by user_id
-        if ($request->has('user_id')) {
+        if ($request->has('user_id') && $request->user_id !== '') {
             $query->whereHas('order', function ($q) use ($request) {
                 $q->where('user_id', $request->user_id);
             });
+        }
+
+        // Filter by bill_id (partial match)
+        if ($request->has('bill_id') && $request->bill_id !== '') {
+            $query->where('bill_id', 'like', '%' . $request->bill_id . '%');
         }
 
         // Search by bill id or user

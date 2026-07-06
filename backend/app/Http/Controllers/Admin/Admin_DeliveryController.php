@@ -15,11 +15,12 @@ class Admin_DeliveryController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Delivery::with('order.user');
+        $query = Delivery::with('order.user', 'order.items.dish', 'order.bill');
 
         // Filter by delivery status
         if ($request->has('delivery_status')) {
-            $query->where('delivery_status', $request->delivery_status);
+            $statuses = explode(',', $request->delivery_status);
+            $query->whereIn('delivery_status', $statuses);
         }
 
         // Filter by payment status

@@ -344,7 +344,7 @@ const OrdersPage = () => {
                                     <tr>
                                         <td colSpan={2} className="py-2 px-3 font-bold border border-black text-green-600">Đã thanh toán bằng điểm:</td>
                                         <td className="py-2 px-3 text-right font-bold text-green-600 border border-black">
-                                            -{Number(detailBill.subtotal_price || 0).toLocaleString('vi-VN')}đ
+                                            -{Math.floor(detailBill.subtotal_price / 100).toLocaleString('vi-VN')} điểm
                                         </td>
                                     </tr>
                                 )}

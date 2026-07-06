@@ -8,6 +8,7 @@ import { CartProvider } from './context/CartContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import PaymentResultPage from './pages/Payment/PaymentResultPage';
+import RefundResultPage from './pages/Refund/RefundResultPage';
 import ScrollToTop from './components/ScrollToTop';
 
 // Pages
@@ -108,6 +109,7 @@ function App() {
 
               {/*Payment*/}
               <Route path="/payment-result" element={<PaymentResultPage />} />
+              <Route path="/refund-result" element={<RefundResultPage />} />
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" />} />

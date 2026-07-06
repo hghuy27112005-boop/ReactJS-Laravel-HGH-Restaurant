@@ -26,6 +26,8 @@ const DeliveriesPage = () => {
     const [pointsModalType, setPointsModalType] = useState(null); // 'insufficient' | 'confirm' | null
     const [pointsNeeded, setPointsNeeded] = useState(0);
     const [currentPoints, setCurrentPoints] = useState(0);
+    const [cancelModalOpen, setCancelModalOpen] = useState(false);
+    const [cancelingBill, setCancelingBill] = useState(null);
 
     // Lưu trạng thái đã xác nhận vào sessionStorage (bao gồm cart + info)
     const saveCheckoutSession = (stage, data) => {
@@ -189,6 +191,27 @@ const DeliveriesPage = () => {
         }
     };
 
+    const confirmCancelOrder = async () => {
+        if (!cancelingBill) return;
+        try {
+            if (cancelingBill.payment_method === 'Points') {
+                const res = await deliveryService.cancelDelivery(cancelingBill.delivery.delivery_id);
+                const refunded = res.data.points_refunded;
+                window.location.href = `/refund-result?method=Points&amount=${refunded}&order_id=${cancelingBill.order_id}`;
+            } else if (cancelingBill.payment_method === 'vnpay') {
+                const res = await vnpayService.createRefundUrl({ order_id: cancelingBill.order_id });
+                window.location.href = res.data.payment_url;
+            } else {
+                alert('Không thể hủy đơn hàng này do phương thức thanh toán không hợp lệ.');
+            }
+        } catch (err) {
+            alert('Lỗi hủy đơn: ' + (err.response?.data?.message || err.message));
+        } finally {
+            setCancelModalOpen(false);
+            setCancelingBill(null);
+        }
+    };
+
     const checkMembershipDowngrade = () => {
         if (!currentPoints) return false;
 
@@ -227,8 +250,14 @@ const DeliveriesPage = () => {
 
     const getFilteredDeliveries = () => {
         if (filter === 'all') return deliveries;
+        if (filter === 'waiting_confirmation') {
+            return deliveries.filter(d => ['waiting_confirmation', 'waiting_approval', 'waiting_info', 'waiting_payment'].includes(d.delivery?.delivery_status));
+        }
         if (filter === 'waiting_delivery') {
-            return deliveries.filter(d => ['waiting_delivery', 'delivering'].includes(d.delivery?.delivery_status));
+            return deliveries.filter(d => ['shipping', 'waiting_delivery', 'delivering'].includes(d.delivery?.delivery_status));
+        }
+        if (filter === 'delivered') {
+            return deliveries.filter(d => ['completed', 'delivered'].includes(d.delivery?.delivery_status));
         }
         return deliveries.filter(d => d.delivery?.delivery_status === filter);
     };
@@ -236,15 +265,16 @@ const DeliveriesPage = () => {
     const getStatusColor = (bill) => {
         const status = bill.delivery?.delivery_status;
         if (status === 'cancelled') return 'danger';
-        if (status === 'delivered') return 'success';
+        if (['completed', 'delivered'].includes(status)) return 'success';
+        if (['shipping', 'waiting_delivery', 'delivering'].includes(status)) return 'info';
         return 'warning';
     };
 
     const getStatusLabel = (bill) => {
         const status = bill.delivery?.delivery_status;
         if (status === 'cancelled') return '✕ Đã hủy';
-        if (status === 'delivered') return '✓ Đã giao hàng';
-        if (status === 'waiting_delivery' || status === 'delivering') return '⏳ Đang chờ giao';
+        if (['completed', 'delivered'].includes(status)) return '✓ Đã giao hàng';
+        if (['shipping', 'waiting_delivery', 'delivering'].includes(status)) return '⏳ Đang giao hàng';
         return '⏳ Đang chờ duyệt';
     };
 
@@ -509,13 +539,47 @@ const DeliveriesPage = () => {
                     </div>
                 )}
 
+                {/* Cancel Order Modal */}
+                {cancelModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                        <div className="bg-white rounded-lg w-full max-w-md overflow-hidden">
+                            <div className="bg-red-600 text-white font-bold text-lg text-center py-3">
+                                Hủy đơn hàng
+                            </div>
+                            <div className="p-6">
+                                <p className="text-gray-700 text-center mb-6">
+                                    Bạn có chắc muốn hủy đơn hàng {cancelingBill?.order_stt || cancelingBill?.order_id} không
+                                </p>
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => {
+                                            setCancelModalOpen(false);
+                                            setCancelingBill(null);
+                                        }}
+                                        className="flex-1 bg-white border border-gray-300 text-gray-800 font-bold py-2 rounded hover:bg-gray-100"
+                                    >
+                                        Đóng
+                                    </button>
+                                    <button
+                                        onClick={confirmCancelOrder}
+                                        className="flex-1 bg-red-600 text-white font-bold py-2 rounded hover:bg-red-700"
+                                    >
+                                        Xác nhận
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Filter Buttons */}
                 <div className="flex gap-2 mb-8 overflow-x-auto">
                     {[
                         { id: 'all', label: 'Tất cả' },
                         { id: 'waiting_confirmation', label: 'Đang chờ duyệt' },
-                        { id: 'waiting_delivery', label: 'Đang chờ giao hàng' },
-                        { id: 'delivered', label: 'Đã giao hàng' }
+                        { id: 'waiting_delivery', label: 'Đang giao hàng' },
+                        { id: 'delivered', label: 'Đã giao hàng' },
+                        { id: 'cancelled', label: 'Đã hủy' }
                     ].map(f => (
                         <button
                             key={f.id}
@@ -539,8 +603,9 @@ const DeliveriesPage = () => {
                             : `Chưa có đơn với bộ lọc "${[
                                 { id: 'all', label: 'Tất cả' },
                                 { id: 'waiting_confirmation', label: 'Đang chờ duyệt' },
-                                { id: 'waiting_delivery', label: 'Đang chờ giao hàng' },
-                                { id: 'delivered', label: 'Đã giao hàng' }
+                                { id: 'waiting_delivery', label: 'Đang giao hàng' },
+                                { id: 'delivered', label: 'Đã giao hàng' },
+                                { id: 'cancelled', label: 'Đã hủy' }
                             ].find(f => f.id === filter)?.label || filter}"`}
                     />
                 ) : (
@@ -596,10 +661,22 @@ const DeliveriesPage = () => {
                                     </div>
                                 )}
 
-                                <div className="mt-4">
+                                <div className="mt-4 flex justify-between items-center">
                                     <Badge variant={getStatusColor(bill)}>
                                         {getStatusLabel(bill)}
                                     </Badge>
+
+                                    {(bill.delivery?.delivery_status === 'waiting_confirmation' || bill.delivery?.delivery_status === 'waiting_approval' || bill.delivery?.delivery_status === 'waiting_info') && (
+                                        <button
+                                            onClick={() => {
+                                                setCancelingBill(bill);
+                                                setCancelModalOpen(true);
+                                            }}
+                                            className="px-4 py-2 bg-red-600 text-white rounded font-bold text-sm hover:bg-red-700 transition"
+                                        >
+                                            Hủy đơn hàng
+                                        </button>
+                                    )}
                                 </div>
                             </Card>
                         ))}

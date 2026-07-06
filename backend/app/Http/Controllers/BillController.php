@@ -408,9 +408,22 @@ class BillController extends Controller
     {
         $bill->load(['order.items.dish', 'order.bookings', 'order.delivery']);
 
-        if (!$bill->order || $bill->order->user_id !== auth()->id()) {
+        $user = auth()->user();
+        if (!$bill->order || ($bill->order->user_id !== $user->user_id && $user->role !== 'admin' && $user->role !== 'staff')) {
             abort(403, 'Bạn không có quyền xem hóa đơn này.');
         }
+
+        $pdf = Pdf::loadView('pdf.invoice', compact('bill'));
+
+        return $pdf->stream('hoa-don-' . $bill->bill_id . '.pdf');
+    }
+
+    /**
+     * Export PDF for admin - no owner check
+     */
+    public function exportPDFAdmin(Bill $bill)
+    {
+        $bill->load(['order.items.dish', 'order.bookings', 'order.delivery']);
 
         $pdf = Pdf::loadView('pdf.invoice', compact('bill'));
 

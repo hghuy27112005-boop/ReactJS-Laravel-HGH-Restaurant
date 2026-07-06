@@ -101,6 +101,8 @@ export const deliveryAPI = {
         axiosInstance.post(`/deliveries/${id}/start`),
     complete: (id) =>
         axiosInstance.post(`/deliveries/${id}/complete`),
+    cancelWithPoints: (id) =>
+        axiosInstance.post(`/deliveries/${id}/cancel-points`),
 };
 
 // Booking Tables API
@@ -240,14 +242,17 @@ export const deliveryService = {
     getDeliveries: () => myBillsAPI.getAll({ order_type: 'delivery' }),
     approveDelivery: (id) => deliveryAPI.approve(id),
     startDelivery: (id) => deliveryAPI.startDelivery(id),
+    cancelDelivery: (id) => deliveryAPI.cancelWithPoints(id),
 };
 
 export const vnpayAPI = {
     createPaymentUrl: (data) => axiosInstance.post('/vnpay/create-payment-url', data),
+    createRefundUrl: (data) => axiosInstance.post('/vnpay/create-refund-url', data),
 };
 
 export const vnpayService = {
     createPaymentUrl: (data) => vnpayAPI.createPaymentUrl(data),
+    createRefundUrl: (data) => vnpayAPI.createRefundUrl(data),
 };
 
 export default axiosInstance;

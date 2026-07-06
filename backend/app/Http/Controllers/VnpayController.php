@@ -105,6 +105,93 @@ class VnpayController extends Controller
         return response()->json(['payment_url' => $paymentUrl]);
     }
 
+    public function createRefundUrl(Request $request)
+    {
+        $request->validate([
+            'order_id' => 'required|exists:orders,order_id',
+        ]);
+
+        $orderId = $request->input('order_id');
+
+        $order = Order::with('user')->where('order_id', $orderId)->first();
+
+        if (!$order) {
+            return response()->json(['message' => 'Order not found'], 404);
+        }
+
+        $amount = (int) round((float) $order->subtotal_price);
+
+        if ($amount < 1000) {
+            return response()->json(['message' => 'Invalid order amount (amount < 1000 VND)'], 422);
+        }
+
+        $vnp_TmnCode    = config('vnpay.tmn_code');
+        $vnp_HashSecret = config('vnpay.hash_secret');
+        $vnp_Url        = config('vnpay.url');
+        $vnp_ReturnUrl  = config('vnpay.return_url');
+
+        $vnp_TxnRef     = $orderId . '_' . time();
+        $vnp_Amount     = $amount * 100;
+        $vnp_CreateDate = now()->format('YmdHis');
+        $vnp_ExpireDate = now()->addMinutes(15)->format('YmdHis');
+        $vnp_OrderInfo  = 'Hoan tien don hang ' . $orderId;
+
+        $rawIp = $request->header('X-Forwarded-For') ?? $request->ip();
+        $ip    = trim(explode(',', $rawIp)[0]);
+
+        $inputData = [
+            "vnp_Version"    => "2.1.0",
+            "vnp_TmnCode"    => $vnp_TmnCode,
+            "vnp_Amount"     => $vnp_Amount,
+            "vnp_Command"    => "pay",
+            "vnp_CreateDate" => $vnp_CreateDate,
+            "vnp_CurrCode"   => "VND",
+            "vnp_ExpireDate" => $vnp_ExpireDate,
+            "vnp_IpAddr"     => $ip,
+            "vnp_Locale"     => "vn",
+            "vnp_OrderInfo"  => $vnp_OrderInfo,
+            "vnp_OrderType"  => "other",
+            "vnp_ReturnUrl"  => $vnp_ReturnUrl,
+            "vnp_TxnRef"     => $vnp_TxnRef,
+        ];
+
+        $bankCode = $request->input('bankCode');
+        if (!empty($bankCode)) {
+            $inputData['vnp_BankCode'] = $bankCode;
+        }
+
+        ksort($inputData);
+
+        $i        = 0;
+        $hashData = "";
+        $query    = "";
+
+        foreach ($inputData as $key => $value) {
+            if ($value !== '' && $value !== null) {
+                if ($i == 1) {
+                    $hashData .= '&' . urlencode($key) . "=" . urlencode($value);
+                } else {
+                    $hashData .= urlencode($key) . "=" . urlencode($value);
+                    $i = 1;
+                }
+                $query .= urlencode($key) . "=" . urlencode($value) . '&';
+            }
+        }
+
+        $vnpSecureHash = hash_hmac('sha512', $hashData, $vnp_HashSecret);
+        $paymentUrl    = $vnp_Url . "?" . $query . 'vnp_SecureHash=' . $vnpSecureHash;
+
+        Log::info('VNPay createRefundUrl', [
+            'order_id'    => $orderId,
+            'amount'      => $amount,
+            'txn_ref'     => $vnp_TxnRef,
+            'secure_hash' => $vnpSecureHash,
+            'payment_url' => $paymentUrl,
+        ]);
+
+        return response()->json(['payment_url' => $paymentUrl]);
+    }
+
     /**
      * Người dùng được VNPAY redirect về đây sau khi thanh toán.
      *
@@ -143,15 +230,25 @@ class VnpayController extends Controller
         $status       = $result['is_success'] ? 'success' : 'failed';
         $responseCode = $result['data']['vnp_ResponseCode'] ?? '99';
 
+        $vnp_OrderInfo = $result['data']['vnp_OrderInfo'] ?? '';
+        $isRefund = str_contains(strtolower($vnp_OrderInfo), 'hoan tien');
+
         Log::info('vnpayReturn redirect', [
             'bill_id'       => $billId,
             'order_id'      => $orderId,
             'status'        => $status,
             'response_code' => $responseCode,
+            'is_refund'     => $isRefund,
         ]);
 
         // ALWAYS include order_id in redirect when available so frontend can poll
         $orderIdParam = $orderId ? "&order_id={$orderId}" : '';
+
+        if ($isRefund) {
+            return redirect()->away(
+                "{$frontendUrl}/refund-result?bill_id={$billId}&status={$status}&code={$responseCode}&order_type={$orderType}{$orderIdParam}"
+            );
+        }
 
         return redirect()->away(
             "{$frontendUrl}/payment-result?bill_id={$billId}&status={$status}&code={$responseCode}&order_type={$orderType}{$orderIdParam}"
@@ -213,6 +310,46 @@ class VnpayController extends Controller
                 'response_code'      => $responseCode,
                 'transaction_status' => $transactionStatus,
             ]);
+            return response()->json(['RspCode' => '00', 'Message' => 'Confirm Success']);
+        }
+
+        $vnp_OrderInfo = $result['data']['vnp_OrderInfo'] ?? '';
+        $isRefund = str_contains(strtolower($vnp_OrderInfo), 'hoan tien');
+
+        if ($isRefund) {
+            Log::info('VNPay IPN refund', ['order_id' => $orderId]);
+            if ($order->order_type === 'delivery' && $order->delivery) {
+                $order->delivery->update([
+                    'delivery_status' => 'cancelled',
+                    'D_payment_status' => 'refunded'
+                ]);
+
+                // Thu hồi điểm
+                $bill = \App\Models\Bill::where('order_id', $orderId)->first();
+                $user = $order->user;
+                if ($bill && $user) {
+                    $subtotal = $order->subtotal_price ?? $bill->total_price;
+                    $total = $bill->total_price;
+                    $basePoints = floor($total / 1000);
+                    $bonusPoints = 0;
+                    if ($subtotal >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {
+                        $bonusMap = [
+                            'bronze' => 10,
+                            'silver' => 20,
+                            'gold' => 30,
+                            'platinum' => 40,
+                            'diamond' => 50,
+                        ];
+                        $bonusPoints = $bonusMap[$user->membership] ?? 0;
+                    }
+                    $pointsToRevoke = $basePoints + $bonusPoints;
+                    if ($pointsToRevoke > 0) {
+                        $user->points -= $pointsToRevoke;
+                        if ($user->points < 0) $user->points = 0;
+                        $user->save();
+                    }
+                }
+            }
             return response()->json(['RspCode' => '00', 'Message' => 'Confirm Success']);
         }
 

@@ -48,6 +48,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('deliveries/{delivery}/approve', [\App\Http\Controllers\DeliveryController::class, 'approve']);
     Route::post('deliveries/{delivery}/start', [\App\Http\Controllers\DeliveryController::class, 'startDelivery']);
     Route::post('deliveries/{delivery}/complete', [\App\Http\Controllers\DeliveryController::class, 'completeDelivery']);
+    Route::post('deliveries/{delivery}/cancel-points', [\App\Http\Controllers\DeliveryController::class, 'cancelWithPoints']);
 
     // Booking Tables
     Route::apiResource('booking-tables', \App\Http\Controllers\BookingTableController::class);
@@ -74,6 +75,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     // Bills Management
     Route::get('admin/bills', [\App\Http\Controllers\Admin\Admin_BillController::class, 'index']);
     Route::put('admin/bills/{bill}', [\App\Http\Controllers\Admin\Admin_BillController::class, 'update']);
+    Route::get('admin/bills/{bill}/export-pdf', [\App\Http\Controllers\BillController::class, 'exportPDFAdmin']);
 
     // Deliveries Management
     Route::get('admin/deliveries', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'index']);
@@ -109,4 +111,5 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 });
 
 Route::post('/vnpay/create-payment-url', [VnpayController::class, 'createPaymentUrl']);
+Route::post('/vnpay/create-refund-url', [VnpayController::class, 'createRefundUrl']);
 Route::get('/vnpay/ipn', [VnpayController::class, 'vnpayIpn']);

@@ -177,4 +177,84 @@ class DeliveryController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Lỗi lưu đơn hàng: ' . $e->getMessage()], 500);
         }
     }
+
+    /**
+     * User cancels delivery paid with Points
+     */
+    public function cancelWithPoints(Request $request, Delivery $delivery)
+    {
+        $user = $request->user();
+        $order = $delivery->order;
+        if (!$order || $order->user_id !== $user->user_id) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        if (!in_array($delivery->delivery_status, ['waiting_info', 'waiting_confirmation', 'waiting_approval'])) {
+            return response()->json(['message' => 'Không thể hủy đơn hàng ở trạng thái này'], 400);
+        }
+
+        $bill = Bill::where('order_id', $order->order_id)->first();
+        if (!$bill) {
+            return response()->json(['message' => 'Bill not found'], 404);
+        }
+
+        if ($bill->payment_method !== 'Points') {
+            return response()->json(['message' => 'Đơn hàng này không thanh toán bằng điểm'], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            $delivery->delivery_status = 'cancelled';
+            $delivery->D_payment_status = 'refunded';
+            $delivery->save();
+            
+            // Thu hồi điểm tích lũy/thưởng đã nhận khi thanh toán
+            $subtotal = $order->subtotal_price ?? $bill->total_price;
+            $total = $bill->total_price;
+            $basePoints = floor($total / 1000);
+            $bonusPoints = 0;
+            if ($user && $subtotal >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {
+                $bonusMap = [
+                    'bronze' => 10,
+                    'silver' => 20,
+                    'gold' => 30,
+                    'platinum' => 40,
+                    'diamond' => 50,
+                ];
+                $bonusPoints = $bonusMap[$user->membership] ?? 0;
+            }
+            $pointsToRevoke = $basePoints + $bonusPoints;
+            if ($pointsToRevoke > 0) {
+                $user->points -= $pointsToRevoke;
+            }
+
+            // Hoàn điểm dựa trên order->subtotal_price
+            $amount = (float) $order->subtotal_price;
+            $refundPoints = (int) floor($amount / 100);
+            
+            if ($refundPoints > 0) {
+                $user->points += $refundPoints;
+                if ($user->points < 0) $user->points = 0; // Đảm bảo không âm điểm
+                $user->save();
+                
+                \App\Models\Points::create([
+                    'user_id' => $user->user_id,
+                    'bill_id' => $bill->bill_id,
+                    'points_earned' => $refundPoints, // Positive value means we give back points
+                    'points_redeemed' => 0,
+                    'booking_total_price' => 0,
+                    'delivery_total_price' => 0,
+                ]);
+            }
+            
+            DB::commit();
+            return response()->json([
+                'message' => 'Hủy đơn thành công',
+                'points_refunded' => $refundPoints
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
 }

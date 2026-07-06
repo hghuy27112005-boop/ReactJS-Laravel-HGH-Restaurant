@@ -137,8 +137,7 @@
             
             @if($bill->payment_method === 'Points')
                 <p style="font-size: 16px; margin-bottom: 5px;">Số tiền phải trả: {{ number_format($subtotal, 0, ',', '.') }} VNĐ</p>
-                <p style="font-size: 14px; color: #27AE60; margin-bottom: 5px;">Hóa đơn này được thanh toán bằng điểm</p>
-                <p class="total-amount">Số tiền đã trả: 0đ</p>
+                <p style="font-size: 14px; color: #27AE60; margin-bottom: 5px;">Đã thanh toán bằng điểm: -{{ number_format(floor($subtotal / 100), 0, ',', '.') }} điểm</p>
             @elseif($discount > 0 && $bill->payment_method === 'vnpay')
                 <p style="font-size: 16px; margin-bottom: 5px;">Số tiền phải trả: {{ number_format($subtotal, 0, ',', '.') }} VNĐ</p>
                 <p style="font-size: 14px; color: #E67E22; margin-bottom: 5px;">Hóa đơn đã áp mã giảm giá VNPay. Giảm: {{ number_format($discount, 0, ',', '.') }} VNĐ</p>

@@ -12,26 +12,48 @@ const AdminDeliveriesPage = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedDelivery, setSelectedDelivery] = useState(null);
     const [showModal, setShowModal] = useState(false);
+    const [overallStats, setOverallStats] = useState({ total: 0, pending: 0, shipping: 0, completed: 0, cancelled: 0 });
 
     // Delivery status constants
     const DELIVERY_STATUS = {
         'waiting_info': { label: 'Chờ thông tin', color: 'info', bgColor: 'bg-blue-50' },
-        'waiting_confirmation': { label: 'Chờ xác nhận', color: 'warning', bgColor: 'bg-yellow-50' },
+        'waiting_confirmation': { label: 'Chờ duyệt', color: 'warning', bgColor: 'bg-yellow-50' },
         'waiting_payment': { label: 'Chờ thanh toán', color: 'warning', bgColor: 'bg-yellow-50' },
         'waiting_approval': { label: 'Chờ duyệt', color: 'warning', bgColor: 'bg-yellow-50' },
-        'shipping': { label: 'Đang giao', color: 'primary', bgColor: 'bg-blue-50' },
-        'completed': { label: 'Hoàn thành', color: 'success', bgColor: 'bg-green-50' },
+        'shipping': { label: 'Đang giao', color: 'info', bgColor: 'bg-blue-50' },
+        'completed': { label: 'Đã giao hàng', color: 'success', bgColor: 'bg-green-50' },
         'cancelled': { label: 'Đã hủy', color: 'danger', bgColor: 'bg-red-50' },
     };
 
     const PAYMENT_STATUS = {
         'unpaid': { label: 'Chưa thanh toán', color: 'danger' },
         'paid': { label: 'Đã thanh toán', color: 'success' },
+        'refunded': { label: 'Đã hoàn tiền', color: 'warning' },
     };
+
+    useEffect(() => {
+        fetchOverallStats();
+    }, []);
 
     useEffect(() => {
         fetchDeliveries();
     }, [filter, search, currentPage]);
+
+    const fetchOverallStats = async () => {
+        try {
+            const response = await adminAPI.deliveries.getAll({ per_page: 10000 });
+            const allDelivs = extractListData(response);
+            setOverallStats({
+                total: response?.data?.pagination?.total || allDelivs.length,
+                pending: allDelivs.filter(d => ['waiting_info', 'waiting_confirmation', 'waiting_approval'].includes(d.delivery_status)).length,
+                shipping: allDelivs.filter(d => d.delivery_status === 'shipping').length,
+                completed: allDelivs.filter(d => d.delivery_status === 'completed').length,
+                cancelled: allDelivs.filter(d => d.delivery_status === 'cancelled').length,
+            });
+        } catch (err) {
+            console.error('Lỗi tải thống kê tổng', err);
+        }
+    };
 
     const fetchDeliveries = async () => {
         try {
@@ -39,7 +61,7 @@ const AdminDeliveriesPage = () => {
             setError(null);
             const filters = {
                 search: search || undefined,
-                delivery_status: filter === 'all' ? undefined : filter,
+                delivery_status: filter === 'all' ? undefined : (filter === 'waiting_confirmation' ? 'waiting_confirmation,waiting_approval' : filter),
                 page: currentPage,
                 per_page: 10,
             };
@@ -59,6 +81,7 @@ const AdminDeliveriesPage = () => {
         try {
             await adminAPI.deliveries.approve(delivery.delivery_id);
             await fetchDeliveries();
+            await fetchOverallStats();
             setShowModal(false);
         } catch (err) {
             setError('Lỗi xác nhận giao hàng');
@@ -70,6 +93,7 @@ const AdminDeliveriesPage = () => {
         try {
             await adminAPI.deliveries.startDelivery(delivery.delivery_id);
             await fetchDeliveries();
+            await fetchOverallStats();
             setShowModal(false);
         } catch (err) {
             setError('Lỗi bắt đầu giao hàng');
@@ -81,23 +105,11 @@ const AdminDeliveriesPage = () => {
         try {
             await adminAPI.deliveries.complete(delivery.delivery_id);
             await fetchDeliveries();
+            await fetchOverallStats();
             setShowModal(false);
         } catch (err) {
             setError('Lỗi hoàn thành giao hàng');
             console.error(err);
-        }
-    };
-
-    const handleCancel = async (delivery) => {
-        if (window.confirm('Bạn chắc chắn muốn hủy giao hàng này?')) {
-            try {
-                await adminAPI.deliveries.cancel(delivery.delivery_id);
-                await fetchDeliveries();
-                setShowModal(false);
-            } catch (err) {
-                setError('Lỗi hủy giao hàng');
-                console.error(err);
-            }
         }
     };
 
@@ -138,12 +150,7 @@ const AdminDeliveriesPage = () => {
 
     if (loading) return <Loading />;
 
-    const stats = {
-        total: pagination.total || 0,
-        pending: deliveries.filter(d => ['waiting_info', 'waiting_confirmation', 'waiting_approval'].includes(d.delivery_status)).length,
-        shipping: deliveries.filter(d => d.delivery_status === 'shipping').length,
-        completed: deliveries.filter(d => d.delivery_status === 'completed').length,
-    };
+    const stats = overallStats;
 
     return (
         <div className="min-h-screen bg-gray-50 py-8">
@@ -153,13 +160,13 @@ const AdminDeliveriesPage = () => {
                 {error && <ErrorMessage message={error} />}
 
                 {/* Stats */}
-                <div className="grid md:grid-cols-4 gap-4 mb-8">
+                <div className="grid md:grid-cols-5 gap-4 mb-8">
                     <Card>
                         <p className="text-sm text-gray-600">Tổng giao hàng</p>
                         <p className="text-3xl font-bold text-red-600">{stats.total}</p>
                     </Card>
                     <Card className="bg-blue-50">
-                        <p className="text-sm text-gray-600">Chờ xử lý</p>
+                        <p className="text-sm text-gray-600">Chờ duyệt</p>
                         <p className="text-3xl font-bold text-blue-600">{stats.pending}</p>
                     </Card>
                     <Card className="bg-purple-50">
@@ -167,23 +174,26 @@ const AdminDeliveriesPage = () => {
                         <p className="text-3xl font-bold text-purple-600">{stats.shipping}</p>
                     </Card>
                     <Card className="bg-green-50">
-                        <p className="text-sm text-gray-600">Hoàn thành</p>
+                        <p className="text-sm text-gray-600">Đã giao hàng</p>
                         <p className="text-3xl font-bold text-green-600">{stats.completed}</p>
+                    </Card>
+                    <Card className="bg-red-50">
+                        <p className="text-sm text-gray-600">Đã hủy</p>
+                        <p className="text-3xl font-bold text-red-400">{stats.cancelled}</p>
                     </Card>
                 </div>
 
                 {/* Search and Filter */}
                 <div className="mb-6 space-y-4">
                     <div className="flex gap-2 flex-wrap">
-                        {['all', 'shipping', 'completed', 'cancelled'].map(status => (
+                        {['all', 'waiting_confirmation', 'shipping', 'completed', 'cancelled'].map(status => (
                             <button
                                 key={status}
                                 onClick={() => { setFilter(status); setCurrentPage(1); }}
-                                className={`px-4 py-2 rounded text-sm font-medium transition ${
-                                    filter === status
-                                        ? 'bg-red-600 text-white'
-                                        : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                                }`}
+                                className={`px-4 py-2 rounded text-sm font-medium transition ${filter === status
+                                    ? 'bg-red-600 text-white'
+                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                    }`}
                             >
                                 {status === 'all' ? 'Tất cả' : DELIVERY_STATUS[status]?.label || status}
                             </button>
@@ -270,11 +280,10 @@ const AdminDeliveriesPage = () => {
                                 <button
                                     key={page}
                                     onClick={() => setCurrentPage(page)}
-                                    className={`px-3 py-1 rounded text-sm ${
-                                        currentPage === page
-                                            ? 'bg-red-600 text-white'
-                                            : 'bg-white border border-gray-300 hover:bg-gray-50'
-                                    }`}
+                                    className={`px-3 py-1 rounded text-sm ${currentPage === page
+                                        ? 'bg-red-600 text-white'
+                                        : 'bg-white border border-gray-300 hover:bg-gray-50'
+                                        }`}
                                 >
                                     {page}
                                 </button>
@@ -287,7 +296,8 @@ const AdminDeliveriesPage = () => {
             {/* Modal Chi tiết */}
             {showModal && selectedDelivery && (
                 <div
-                    className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-[1100]"
+                    className="fixed inset-0 z-[1100] flex items-center justify-center p-4"
+                    style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
                     onClick={() => setShowModal(false)}
                 >
                     <div
@@ -315,7 +325,7 @@ const AdminDeliveriesPage = () => {
                                     </div>
                                     <div>
                                         <p className="text-xs text-gray-500">ID Đơn hàng</p>
-                                        <p className="font-mono font-bold text-sm">{selectedDelivery.order_id}</p>
+                                        <p className="font-mono font-bold text-sm">{selectedDelivery.order?.order_stt || selectedDelivery.order_id}</p>
                                     </div>
                                     <div className="col-span-2">
                                         <p className="text-xs text-gray-500">Địa chỉ giao</p>
@@ -341,6 +351,63 @@ const AdminDeliveriesPage = () => {
                                         <p className="text-sm">{selectedDelivery.order?.user?.tele_number || 'N/A'}</p>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Danh sách các món */}
+                            <div className="border-t border-red-600 pt-4">
+                                <h3 className="font-bold text-lg mb-3">Danh sách các món</h3>
+                                <table className="w-full max-w-lg text-sm bg-white border border-black border-t-4 border-t-red-600">
+                                    <thead>
+                                        <tr>
+                                            <th className="text-left py-2 px-3 font-semibold text-gray-700 border border-black">Món</th>
+                                            <th className="text-center py-2 px-3 font-semibold text-gray-700 border border-black">SL</th>
+                                            <th className="text-right py-2 px-3 font-semibold text-gray-700 border border-black">Thành tiền</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(selectedDelivery.order?.items || []).map((item, i) => (
+                                            <tr key={i}>
+                                                <td className="py-2 px-3 border border-black">{item.dish?.dish_name || item.dish_name || 'N/A'}</td>
+                                                <td className="py-2 px-3 text-center border border-black">{item.quantity}</td>
+                                                <td className="py-2 px-3 text-right font-bold text-red-600 border border-black">
+                                                    {(Number(item.unit_price) * item.quantity).toLocaleString('vi-VN')}đ
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <td colSpan={2} className="py-2 px-3 font-bold border border-black">Tổng cộng:</td>
+                                            <td className="py-2 px-3 text-right font-bold text-red-600 border border-black">
+                                                {Number(selectedDelivery.order?.subtotal_price || 0).toLocaleString('vi-VN')}đ
+                                            </td>
+                                        </tr>
+                                        {selectedDelivery.order?.bill?.payment_method === 'vnpay' && (Number(selectedDelivery.order?.subtotal_price || 0) > Number(selectedDelivery.order?.bill?.total_price || 0)) && (
+                                            <tr>
+                                                <td colSpan={2} className="py-2 px-3 font-bold border border-black text-orange-500">Giảm giá VNPay:</td>
+                                                <td className="py-2 px-3 text-right font-bold text-orange-500 border border-black">
+                                                    -{Number((selectedDelivery.order?.subtotal_price || 0) - (selectedDelivery.order?.bill?.total_price || 0)).toLocaleString('vi-VN')}đ
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {selectedDelivery.order?.bill?.payment_method === 'Points' && (
+                                            <tr>
+                                                <td colSpan={2} className="py-2 px-3 font-bold border border-black text-green-600">Đã thanh toán bằng điểm:</td>
+                                                <td className="py-2 px-3 text-right font-bold text-green-600 border border-black">
+                                                    -{Math.floor((selectedDelivery.order?.subtotal_price || 0) / 100).toLocaleString('vi-VN')} điểm
+                                                </td>
+                                            </tr>
+                                        )}
+                                        <tr>
+                                            <td colSpan={2} className="py-2 px-3 font-bold border border-black text-red-600">
+                                                {selectedDelivery.order?.bill?.payment_method === 'vnpay' ? 'Số tiền đã trả:' : 'Số tiền cần trả:'}
+                                            </td>
+                                            <td className="py-2 px-3 text-right font-bold text-red-600 border border-black">
+                                                {Number(selectedDelivery.order?.bill?.total_price || 0).toLocaleString('vi-VN')}đ
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
                             </div>
 
                             {/* Trạng thái */}
@@ -390,14 +457,6 @@ const AdminDeliveriesPage = () => {
                                 {getActionButtons(selectedDelivery) && (
                                     <>
                                         {getActionButtons(selectedDelivery)}
-                                        {!['completed', 'cancelled'].includes(selectedDelivery.delivery_status) && (
-                                            <button
-                                                onClick={() => handleCancel(selectedDelivery)}
-                                                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
-                                            >
-                                                Hủy giao hàng
-                                            </button>
-                                        )}
                                     </>
                                 )}
                                 <button
