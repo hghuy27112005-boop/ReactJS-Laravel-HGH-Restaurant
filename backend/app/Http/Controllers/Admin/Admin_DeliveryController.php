@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Delivery;
 use App\Models\Order;
+use App\Models\Stock;
 use App\Services\OrderCodeGenerator;
 use Illuminate\Http\Request;
 
@@ -15,9 +16,10 @@ class Admin_DeliveryController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Delivery::with('order.user', 'order.items.dish', 'order.bill');
+        $query = Delivery::with('order.user', 'order.items.dish', 'order.bill')
+            ->whereIn('delivery_status', ['waiting_approval', 'shipping', 'completed', 'cancelled']);
 
-        // Filter by delivery status
+        // Filter by delivery status (thu hẹp thêm trong phạm vi 4 trạng thái cho phép ở trên)
         if ($request->has('delivery_status')) {
             $statuses = explode(',', $request->delivery_status);
             $query->whereIn('delivery_status', $statuses);
@@ -36,16 +38,13 @@ class Admin_DeliveryController extends Controller
             $query->whereDate('created_at', '<=', $request->date_to);
         }
 
-        // Search by delivery_id, order_id, or customer name/address
+        // Search by delivery_id or customer name
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('delivery_id', 'like', '%' . $search . '%')
-                    ->orWhere('order_id', 'like', '%' . $search . '%')
-                    ->orWhere('address', 'like', '%' . $search . '%')
                     ->orWhereHas('order.user', function ($subq) use ($search) {
-                        $subq->where('name', 'like', '%' . $search . '%')
-                            ->orWhere('phone', 'like', '%' . $search . '%');
+                        $subq->where('username', 'like', '%' . $search . '%');
                     });
             });
         }
@@ -139,6 +138,11 @@ class Admin_DeliveryController extends Controller
         $delivery->update([
             'delivery_status' => 'shipping',
         ]);
+
+        if ($delivery->order) {
+            Stock::decrementStockForOrder($delivery->order, now()->format('Y-m-d'));
+            Stock::refillIfLowForOrder($delivery->order, now()->format('Y-m-d'));
+        }
 
         return response()->json([
             'data' => $delivery,

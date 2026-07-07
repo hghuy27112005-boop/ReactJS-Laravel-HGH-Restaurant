@@ -256,12 +256,20 @@ const MenuPage = () => {
                                         {Number(dish.price).toLocaleString('vi-VN')}đ
                                     </p>
                                     {dish.is_bestseller && (
-                                        <div className="mb-4">
+                                        <div className="mb-2">
                                             <span className="inline-block bg-yellow-200 text-yellow-800 text-xs font-semibold px-3 py-1 rounded-full">
                                                 ⭐ Bán chạy
                                             </span>
                                         </div>
                                     )}
+                                    {dish.quantity_left !== undefined && (
+                                        <div className="mb-4">
+                                            <span className={`text-xs font-semibold ${dish.quantity_left <= 15 ? 'text-red-600' : 'text-green-700'}`}>
+                                                Còn lại {dish.quantity_left} phần
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <div className="mt-auto grid grid-cols-2 gap-2">
                                         <button
                                             onClick={() => handleAddToCart(dish, 'mang-ve')}

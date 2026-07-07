@@ -4,6 +4,7 @@ namespace Tests\Unit\Models;
 
 use App\Models\Dish;
 use App\Models\DishType;
+use App\Models\Stock;
 use Tests\TestCase;
 
 class DishTest extends TestCase
@@ -126,5 +127,36 @@ class DishTest extends TestCase
         $bestsellers = Dish::where('is_bestseller', true)->get();
 
         $this->assertCount(3, $bestsellers);
+    }
+
+    public function test_get_current_stock_creates_date_specific_stock_record(): void
+    {
+        $dishType = DishType::create(['type_name' => 'Test Type']);
+        $dish = Dish::create([
+            'dish_name' => 'Test Dish',
+            'type_id' => $dishType->type_id,
+            'image_url' => 'test.png',
+            'price' => 30000,
+            'is_bestseller' => false,
+            'is_active' => true,
+        ]);
+
+        $stock = $dish->getCurrentStock();
+
+        $this->assertEquals(50, $stock);
+
+        $today = now()->format('Y-m-d');
+        $stockId = (new \App\Services\OrderCodeGenerator())->generateStockId($dish->dish_id, $today);
+
+        $this->assertDatabaseHas('stocks', [
+            'stock_id' => $stockId,
+            'dish_id' => $dish->dish_id,
+            'quantity_start' => 50,
+            'quantity_left' => 50,
+        ]);
+
+        $createdStock = Stock::find($stockId);
+        $this->assertNotNull($createdStock);
+        $this->assertSame(0, (int) $createdStock->refill_count);
     }
 }

@@ -181,6 +181,11 @@ class BillController extends Controller
                 }
             }
 
+            // Trừ kho ngay khi xác nhận đặt bàn (không đợi thanh toán xong)
+            if ($validated['order_type'] === 'booking_table') {
+                \App\Models\Stock::decrementStockForOrder($order, $validated['booking_table']['start_date']);
+            }
+
             // Create Bill — booking_table orders are paid immediately at checkout
             $isBooking = $validated['order_type'] === 'booking_table';
             $billId = $generator->generateBillId($validated['order_type'], $relatedId);
@@ -535,6 +540,9 @@ class BillController extends Controller
                         'booking_status'   => 'waiting_confirmation',
                     ]);
                 }
+                $firstBt = $bookingTables->first();
+                $date = $firstBt ? $firstBt->booking_date : now()->format('Y-m-d');
+                \App\Models\Stock::refillIfLowForOrder($order, $date);
             }
 
             Points::create([
@@ -634,6 +642,9 @@ class BillController extends Controller
                             'booking_status'   => 'waiting_confirmation',
                         ]);
                     }
+                    $firstBt = $bookingTables->first();
+                    $date = $firstBt ? $firstBt->booking_date : now()->format('Y-m-d');
+                    \App\Models\Stock::refillIfLowForOrder($order, $date);
                 }
             }
 

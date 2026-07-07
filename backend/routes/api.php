@@ -18,6 +18,9 @@ Route::get('/dishes', [\App\Http\Controllers\DishController::class, 'index']);
 Route::get('/dishes/{id}', [\App\Http\Controllers\DishController::class, 'show']);
 Route::get('/dish-types', [\App\Http\Controllers\DishTypeController::class, 'index']);
 
+// Public API - Stock check (used by booking and delivery pages)
+Route::post('/stocks/check', [\App\Http\Controllers\Admin\Admin_StockController::class, 'checkStock']);
+
 // Public - Promotions
 Route::get('/sale-off-events', [\App\Http\Controllers\SaleOffEventController::class, 'index']);
 Route::get('/sale-off-events/{id}', [\App\Http\Controllers\SaleOffEventController::class, 'show']);
@@ -86,8 +89,9 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::post('admin/deliveries/{delivery}/cancel', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'cancel']);
 
     // Stock Management
-    Route::apiResource('admin/stocks', \App\Http\Controllers\Admin\Admin_StockController::class);
     Route::get('admin/stocks/low-stock', [\App\Http\Controllers\Admin\Admin_StockController::class, 'lowStock']);
+    Route::get('admin/stocks/by-date', [\App\Http\Controllers\Admin\Admin_StockController::class, 'byDate']);
+    Route::apiResource('admin/stocks', \App\Http\Controllers\Admin\Admin_StockController::class);
 
     // Users Management
     Route::apiResource('admin/users', \App\Http\Controllers\Admin\Admin_UserController::class);

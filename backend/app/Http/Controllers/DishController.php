@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Dish;
+use App\Models\Stock;
+use App\Services\OrderCodeGenerator;
+use Carbon\Carbon;
 
 class DishController extends Controller
 {
@@ -12,12 +15,28 @@ class DishController extends Controller
         // Chỉ lấy món đang bán (is_active = true) cho trang menu công khai / đặt hàng
         $dishes = Dish::where('is_active', true)->get();
 
-        if ($request->expectsJson()) {
-            $dishes->each(function ($dish) {
-                $dish->image_url = $dish->image_url;
-            });
+        // Lấy/tạo stock của ngày hôm nay và gắn quantity_left vào mỗi món
+        $generator = new OrderCodeGenerator();
+        $today = now()->format('Y-m-d');
 
-            return response()->json($dishes);
+        $result = $dishes->map(function ($dish) use ($generator, $today) {
+            $stockId = $generator->generateStockId($dish->dish_id, $today);
+            $stock = Stock::find($stockId);
+            if (!$stock) {
+                $stock = Stock::create([
+                    'stock_id'       => $stockId,
+                    'dish_id'        => $dish->dish_id,
+                    'quantity_start' => 50,
+                    'quantity_left'  => 50,
+                ]);
+            }
+            $dishArray = $dish->toArray();
+            $dishArray['quantity_left'] = (int) $stock->quantity_left;
+            return $dishArray;
+        });
+
+        if ($request->expectsJson()) {
+            return response()->json($result->values());
         }
 
         return view('menu', ['danhSachMon' => $dishes]);

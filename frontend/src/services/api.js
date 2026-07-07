@@ -149,6 +149,11 @@ export const promotionAPI = {
     getById: (id) => axiosInstance.get(`/sale-off-events/${id}`),
 };
 
+// Stock API (public check endpoint)
+export const stockAPI = {
+    check: (items, date) => axiosInstance.post('/stocks/check', { items, date }),
+};
+
 // Admin APIs
 export const adminAPI = {
     dashboard: {

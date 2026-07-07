@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\OrderCodeGenerator;
 use Illuminate\Database\Eloquent\Model;
 
 class Dish extends Model
@@ -118,11 +119,15 @@ class Dish extends Model
      */
     public function getCurrentStock()
     {
-        $stock = Stock::where('dish_id', $this->dish_id)
-            ->where('status', 'active')
-            ->first();
+        $generator = new OrderCodeGenerator();
+        $stockId = $generator->generateStockId($this->dish_id, now()->format('Y-m-d'));
+        $stock = Stock::find($stockId);
 
-        return $stock ? $stock->quantity_left : 0;
+        if (!$stock) {
+            $stock = Stock::getOrCreateForDishAndDate($this->dish_id, now()->format('Y-m-d'));
+        }
+
+        return (int) ($stock ? $stock->quantity_left : 0);
     }
 
     /**

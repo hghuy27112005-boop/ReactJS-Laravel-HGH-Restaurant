@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { bookingService, billService, vnpayService, extractListData, userAPI, orderService } from '../../services/api';
+import { bookingService, billService, vnpayService, extractListData, userAPI, orderService, stockAPI } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState, Modal } from '../../components/Shared';
 import { useAuthContext } from '../../context/AuthContext';
 
@@ -31,6 +31,7 @@ const BookingsPage = () => {
     const [pointsModalType, setPointsModalType] = useState(null); // 'insufficient' | 'confirm' | null
     const [pointsNeeded, setPointsNeeded] = useState(0);
     const [currentPoints, setCurrentPoints] = useState(0);
+    const [stockErrorItems, setStockErrorItems] = useState(null); // null = ẩn, [...] = danh sách món vượt kho
 
     // Booking Form State
     const [bookingDate, setBookingDate] = useState('');
@@ -114,7 +115,8 @@ const BookingsPage = () => {
             }
         } else {
             // Set default date to today only nếu không có session
-            const today = new Date().toISOString().split('T')[0];
+            const now = new Date();
+            const today = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().split('T')[0];
             setBookingDate(today);
         }
     }, []);
@@ -227,6 +229,19 @@ const BookingsPage = () => {
         setBookingConfirmError(null);
 
         try {
+            // Kiểm tra số lượng kho trước
+            const stockDate = bookingDate || new Date().toISOString().slice(0, 10);
+            const items = bookingCart.map(item => ({ dish_id: item.dish_id, quantity: item.quantity }));
+            try {
+                await stockAPI.check(items, stockDate);
+            } catch (stockErr) {
+                if (stockErr.response?.status === 422) {
+                    setStockErrorItems(stockErr.response.data.exceeded || []);
+                    setBookingConfirming(false);
+                    return;
+                }
+            }
+
             // Kiểm tra overlap một lần nữa ngay trước khi tạo bill để tránh race-condition
             try {
                 await bookingService.checkOverlap({
@@ -897,7 +912,7 @@ const BookingsPage = () => {
                     )}
 
                     {isBookingConfirmModalOpen && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={handleBackdropClick}>
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-400/40 px-4" onClick={handleBackdropClick}>
                             <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
                                 <div className="bg-red-600 text-white px-6 py-4 flex items-center justify-between">
                                     <div>
@@ -1143,6 +1158,46 @@ const BookingsPage = () => {
                     </div>
                 )}
             </div>
+
+            {/* Stock Error Modal */}
+            {stockErrorItems !== null && (
+                <div className="fixed inset-0 bg-gray-400/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full">
+                        <div className="bg-red-600 text-white px-6 py-4 rounded-t-lg">
+                            <h2 className="text-xl font-bold">Báo lỗi</h2>
+                        </div>
+                        <div className="p-6">
+                            <p className="text-gray-700 mb-4">Hiện có món ăn đang được đặt quá số lượng còn trong kho:</p>
+                            <table className="w-full text-sm border border-gray-200 rounded">
+                                <thead className="bg-gray-100">
+                                    <tr>
+                                        <th className="px-3 py-2 text-left">Món ăn</th>
+                                        <th className="px-3 py-2 text-center">SL yêu cầu</th>
+                                        <th className="px-3 py-2 text-center">SL còn trong kho</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {stockErrorItems.map((item, i) => (
+                                        <tr key={i} className="border-t">
+                                            <td className="px-3 py-2">{item.dish_name}</td>
+                                            <td className="px-3 py-2 text-center text-red-600 font-semibold">{item.requested}</td>
+                                            <td className="px-3 py-2 text-center text-green-700 font-semibold">{item.available}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            <div className="mt-6 flex justify-end">
+                                <button
+                                    onClick={() => setStockErrorItems(null)}
+                                    className="px-5 py-2 bg-red-600 text-white rounded font-bold hover:bg-red-700"
+                                >
+                                    Đóng
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

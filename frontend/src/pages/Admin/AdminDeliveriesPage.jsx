@@ -8,6 +8,7 @@ const AdminDeliveriesPage = () => {
     const [error, setError] = useState(null);
     const [filter, setFilter] = useState('all');
     const [search, setSearch] = useState('');
+    const [tempSearch, setTempSearch] = useState('');
     const [pagination, setPagination] = useState({});
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedDelivery, setSelectedDelivery] = useState(null);
@@ -115,16 +116,6 @@ const AdminDeliveriesPage = () => {
 
     const getActionButtons = (delivery) => {
         switch (delivery.delivery_status) {
-            case 'waiting_info':
-                return (
-                    <button
-                        onClick={() => handleApprove(delivery)}
-                        className="px-3 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700"
-                    >
-                        Xác nhận
-                    </button>
-                );
-            case 'waiting_confirmation':
             case 'waiting_approval':
                 return (
                     <button
@@ -201,15 +192,21 @@ const AdminDeliveriesPage = () => {
                     </div>
                     <input
                         type="text"
-                        placeholder="Tìm kiếm theo ID giao hàng, tên khách, SĐT..."
-                        value={search}
-                        onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                        placeholder="Tìm kiếm theo ID giao hàng hoặc tên khách hàng..."
+                        value={tempSearch}
+                        onChange={(e) => setTempSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                setSearch(tempSearch);
+                                setCurrentPage(1);
+                            }
+                        }}
                         className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-red-600"
                     />
                 </div>
 
                 {/* Deliveries Table */}
-                <Card title={`Danh sách giao hàng (${deliveries.length})`}>
+                <Card title={`Danh sách giao hàng (${pagination.total || deliveries.length})`}>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
                             <thead className="bg-gray-100 border-b">

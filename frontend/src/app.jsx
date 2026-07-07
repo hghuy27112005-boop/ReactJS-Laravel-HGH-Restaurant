@@ -99,7 +99,7 @@ function App() {
               {/* Admin Routes */}
               <Route path="/admin/dashboard" element={<ProtectedRoute requireAdmin={true}><AdminDashboard /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute requireAdmin={true}><AdminUsersPage /></ProtectedRoute>} />
-              <Route path="/admin/stock" element={<ProtectedRoute requireAdmin={true}><AdminStockPage /></ProtectedRoute>} />
+              <Route path="/admin/stocks" element={<ProtectedRoute requireAdmin={true}><AdminStockPage /></ProtectedRoute>} />
               <Route path="/admin/deliveries" element={<ProtectedRoute requireAdmin={true}><AdminDeliveriesPage /></ProtectedRoute>} />
               <Route path="/admin/sales" element={<ProtectedRoute requireAdmin={true}><SalesReportPage /></ProtectedRoute>} />
               <Route path="/admin/analytics" element={<ProtectedRoute requireAdmin={true}><AnalyticsDashboardPage /></ProtectedRoute>} />

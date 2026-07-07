@@ -11,10 +11,40 @@ use App\Models\Bill;
 use App\Models\BookingTable;
 use App\Models\Dish;
 use App\Models\Delivery;
+use App\Models\Stock;
 use App\Services\OrderCodeGenerator;
 
 class OrderController extends Controller
 {
+    private function resolveStockDate(array $validated): string
+    {
+        if (($validated['order_type'] ?? null) === 'booking_table' && !empty($validated['booking_table']['start_date'])) {
+            return $validated['booking_table']['start_date'];
+        }
+
+        return now()->format('Y-m-d');
+    }
+
+    private function ensureStockAvailability(array $items, string $date): ?array
+    {
+        $exceeded = [];
+
+        foreach ($items as $item) {
+            $stock = Stock::getOrCreateForDishAndDate($item['dish_id'], $date);
+            if ($item['quantity'] > $stock->quantity_left) {
+                $dish = Dish::find($item['dish_id']);
+                $exceeded[] = [
+                    'dish_id' => $item['dish_id'],
+                    'dish_name' => $dish?->dish_name ?? 'Unknown',
+                    'requested' => $item['quantity'],
+                    'available' => (int) $stock->quantity_left,
+                ];
+            }
+        }
+
+        return count($exceeded) > 0 ? $exceeded : null;
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -30,6 +60,15 @@ class OrderController extends Controller
             'booking_table.start_time' => 'required_if:order_type,booking_table|string',
             'booking_table.end_time' => 'required_if:order_type,booking_table|string',
         ]);
+
+        $stockDate = $this->resolveStockDate($validated);
+        $stockExceeded = $this->ensureStockAvailability($validated['items'], $stockDate);
+        if ($stockExceeded) {
+            return response()->json([
+                'message' => 'Một số món ăn vượt quá số lượng còn trong kho.',
+                'exceeded' => $stockExceeded,
+            ], 422);
+        }
 
         DB::beginTransaction();
         try {
@@ -142,6 +181,13 @@ class OrderController extends Controller
     {
         // Order deletion should cascade to related items, booking tables, deliveries, and bills.
         try {
+            if ($order->order_type === 'booking_table') {
+                $order->load('bookings');
+                $firstBt = $order->bookings->first();
+                $date = $firstBt ? $firstBt->booking_date : now()->format('Y-m-d');
+                Stock::restoreStockForOrder($order, $date);
+            }
+
             $order->delete();
             return response()->json(['message' => 'Đã xóa đơn hàng thành công'], 200);
         } catch (\Exception $e) {

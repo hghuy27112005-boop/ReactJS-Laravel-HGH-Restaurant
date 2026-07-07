@@ -432,6 +432,12 @@ class VnpayController extends Controller
 
             $this->awardPointsAndStats($bill, $bill->order);
 
+            if ($bill->order->order_type === 'booking_table') {
+                $booking = $bill->order->bookings->first() ?? $bill->order->bookingTable->first();
+                $date = $booking ? $booking->booking_date : now()->format('Y-m-d');
+                \App\Models\Stock::refillIfLowForOrder($bill->order, $date);
+            }
+
             DB::commit();
             return true;
         } catch (\Throwable $e) {

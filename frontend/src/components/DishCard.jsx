@@ -5,6 +5,7 @@ import { formatCurrency } from '../utils/helpers';
 
 const DishCard = ({ dish, onDetailClick }) => {
     const { addToCart } = useCart();
+    const stockLeft = Number(dish.quantity_left ?? dish.stock_quantity ?? 0);
 
     return (
         <div className="bg-white rounded-lg shadow hover:shadow-lg transition overflow-hidden">
@@ -45,10 +46,10 @@ const DishCard = ({ dish, onDetailClick }) => {
 
                 {/* Stock Status */}
                 <div className="mb-4">
-                    {dish.stock_quantity > 20 ? (
+                    {stockLeft > 20 ? (
                         <p className="text-sm text-green-600">✓ Còn hàng</p>
-                    ) : dish.stock_quantity > 0 ? (
-                        <p className="text-sm text-yellow-600">⚠️ Sắp hết ({dish.stock_quantity})</p>
+                    ) : stockLeft > 0 ? (
+                        <p className="text-sm text-yellow-600">⚠️ Sắp hết ({stockLeft})</p>
                     ) : (
                         <p className="text-sm text-red-600">✕ Hết hàng</p>
                     )}
@@ -65,10 +66,10 @@ const DishCard = ({ dish, onDetailClick }) => {
                     </Button>
                     <Button
                         onClick={() => addToCart(dish)}
-                        disabled={dish.stock_quantity === 0}
+                        disabled={stockLeft === 0}
                         className="w-full"
                     >
-                        {dish.stock_quantity > 0 ? 'Thêm vào giỏ' : 'Hết hàng'}
+                        {stockLeft > 0 ? 'Thêm vào giỏ' : 'Hết hàng'}
                     </Button>
                 </div>
             </div>

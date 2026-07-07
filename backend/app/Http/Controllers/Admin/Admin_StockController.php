@@ -5,63 +5,117 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Stock;
 use App\Models\Dish;
+use App\Services\OrderCodeGenerator;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class Admin_StockController extends Controller
 {
     /**
-     * Get all stocks
+     * Tự động tạo hoặc lấy stock của ngày hôm nay cho món ăn
+     */
+    private function getOrCreateTodayStock(Dish $dish, ?string $date = null): Stock
+    {
+        return Stock::getOrCreateForDishAndDate($dish->dish_id, $date);
+    }
+
+    /**
+     * Lấy danh sách stock theo ngày (default: hôm nay) — dùng cho admin
+     */
+    public function byDate(Request $request)
+    {
+        $date = $request->get('date', now()->format('Y-m-d'));
+
+        $dishes = Dish::where('is_active', true)->orderBy('dish_id')->get();
+        $stocks = [];
+
+        foreach ($dishes as $dish) {
+            $stock = $this->getOrCreateTodayStock($dish, $date);
+            $stock->dish = $dish;
+            $stocks[] = $stock;
+        }
+
+        return response()->json([
+            'data' => $stocks,
+            'date' => $date,
+        ]);
+    }
+
+    /**
+     * Get all stocks (legacy admin view)
      */
     public function index(Request $request)
     {
-        $query = Stock::with('dish');
+        $date = $request->get('date', now()->format('Y-m-d'));
 
-        // Filter by status
-        if ($request->has('status')) {
-            $query->where('status', $request->status);
+        $query = Dish::where('is_active', true)->orderBy('dish_id');
+
+        if ($request->has('search')) {
+            $query->where('dish_name', 'like', '%' . $request->search . '%');
         }
 
-        // Filter by low stock
-        if ($request->has('low_stock') && $request->low_stock == 'true') {
-            $query->where('quantity_left', '<=', 15);
-        }
+        $dishes = $query->get();
+        $stocks = [];
 
-        $stocks = $query->paginate($request->get('per_page', 20));
+        foreach ($dishes as $dish) {
+            $stock = $this->getOrCreateTodayStock($dish, $date);
+            $stock->dish = $dish;
+            $stocks[] = $stock;
+        }
 
         return response()->json([
-            'data' => $stocks->items(),
+            'data' => $stocks,
+            'date' => $date,
             'pagination' => [
-                'total' => $stocks->total(),
-                'per_page' => $stocks->perPage(),
-                'current_page' => $stocks->currentPage(),
-                'last_page' => $stocks->lastPage(),
+                'total' => count($stocks),
+                'per_page' => count($stocks),
+                'current_page' => 1,
+                'last_page' => 1,
             ],
         ]);
     }
 
     /**
-     * Create stock
+     * Check stock availability for a list of items on a given date.
+     * Used by Booking and Delivery pages before checkout.
      */
-    public function store(Request $request)
+    public function checkStock(Request $request)
     {
-        $validated = $request->validate([
-            'dish_id' => 'required|exists:dishes,dish_id',
-            'quantity_start' => 'required|integer|min:1',
-            'cost_per_unit' => 'required|numeric|min:0',
+        $request->validate([
+            'items' => 'required|array',
+            'items.*.dish_id' => 'required|integer|exists:dishes,dish_id',
+            'items.*.quantity' => 'required|integer|min:1',
+            'date' => 'nullable|date',
         ]);
 
-        $stock = Stock::create([
-            'dish_id' => $validated['dish_id'],
-            'quantity_start' => $validated['quantity_start'],
-            'quantity_left' => $validated['quantity_start'],
-            'cost_per_unit' => $validated['cost_per_unit'],
-            'status' => 'active',
-        ]);
+        $date = $request->get('date', now()->format('Y-m-d'));
+        $exceeded = [];
 
-        return response()->json([
-            'data' => $stock->load('dish'),
-            'message' => 'Stock created successfully',
-        ], 201);
+        foreach ($request->items as $item) {
+            $dish = Dish::find($item['dish_id']);
+            if (!$dish) continue;
+
+            $stock = $this->getOrCreateTodayStock($dish, $date);
+
+            if ($item['quantity'] > $stock->quantity_left) {
+                $exceeded[] = [
+                    'dish_id' => $dish->dish_id,
+                    'dish_name' => $dish->dish_name,
+                    'requested' => $item['quantity'],
+                    'available' => $stock->quantity_left,
+                ];
+            }
+        }
+
+        if (count($exceeded) > 0) {
+            return response()->json([
+                'ok' => false,
+                'exceeded' => $exceeded,
+                'message' => 'Một số món ăn đang được đặt quá số lượng còn trong kho.',
+            ], 422);
+        }
+
+        return response()->json(['ok' => true]);
     }
 
     /**
@@ -75,22 +129,15 @@ class Admin_StockController extends Controller
     }
 
     /**
-     * Update stock
+     * Update stock quantity_left manually (admin override)
      */
     public function update(Request $request, Stock $stock)
     {
         $validated = $request->validate([
             'quantity_left' => 'integer|min:0',
-            'status' => 'in:active,low_stock,expired,replaced',
-            'cost_per_unit' => 'numeric|min:0',
         ]);
 
         $stock->update($validated);
-
-        // Check if needs to be marked as low stock
-        if ($stock->quantity_left <= 15 && $stock->status === 'active') {
-            $stock->update(['status' => 'low_stock']);
-        }
 
         return response()->json([
             'data' => $stock,
@@ -111,126 +158,54 @@ class Admin_StockController extends Controller
     }
 
     /**
-     * Get low stock items
+     * Get low stock items for today
      */
     public function lowStock(Request $request)
     {
-        $stocks = Stock::where('quantity_left', '<=', 15)
+        $date = $request->get('date', now()->format('Y-m-d'));
+        $generator = new OrderCodeGenerator();
+        $dateFormatted = Carbon::parse($date)->format('dmy');
+        // low stock: query records for this date (stock_id starts with date prefix)
+        $stocks = Stock::where('stock_id', 'like', $dateFormatted . '%')
+            ->where('quantity_left', '<=', 15)
             ->with('dish')
-            ->paginate($request->get('per_page', 20));
+            ->get();
 
         return response()->json([
-            'data' => $stocks->items(),
-            'pagination' => [
-                'total' => $stocks->total(),
-                'per_page' => $stocks->perPage(),
-                'current_page' => $stocks->currentPage(),
-                'last_page' => $stocks->lastPage(),
-            ],
+            'data' => $stocks,
         ]);
     }
 
     /**
-     * Decrease stock (when order is placed)
+     * Create a stock entry (manual override — rarely needed)
      */
-    public function decreaseQuantity(Request $request, Stock $stock)
+    public function store(Request $request)
     {
         $validated = $request->validate([
-            'quantity' => 'required|integer|min:1',
+            'dish_id' => 'required|exists:dishes,dish_id',
+            'date' => 'nullable|date',
+            'quantity_start' => 'integer|min:1',
         ]);
 
-        if ($stock->quantity_left < $validated['quantity']) {
-            return response()->json([
-                'message' => 'Insufficient stock',
-            ], 422);
+        $generator = new OrderCodeGenerator();
+        $stockId = $generator->generateStockId($validated['dish_id'], $validated['date'] ?? null);
+
+        $existing = Stock::find($stockId);
+        if ($existing) {
+            return response()->json(['data' => $existing->load('dish'), 'message' => 'Stock already exists'], 200);
         }
 
-        $stock->decreaseQuantity($validated['quantity']);
-
-        return response()->json([
-            'data' => $stock,
-            'message' => 'Stock decreased successfully',
-        ]);
-    }
-
-    /**
-     * Increase stock (for restocking)
-     */
-    public function increaseQuantity(Request $request, Stock $stock)
-    {
-        $validated = $request->validate([
-            'quantity' => 'required|integer|min:1',
-        ]);
-
-        $stock->increaseQuantity($validated['quantity']);
-
-        // Reset status if restocking from low stock
-        if ($stock->status === 'low_stock' && $stock->quantity_left > 15) {
-            $stock->update(['status' => 'active']);
-        }
-
-        return response()->json([
-            'data' => $stock,
-            'message' => 'Stock increased successfully',
-        ]);
-    }
-
-    /**
-     * Mark stock as replaced
-     */
-    public function markReplaced(Request $request, Stock $stock)
-    {
-        $stock->update([
-            'status' => 'replaced',
-            'replaced_at' => now(),
+        $qty = $validated['quantity_start'] ?? 50;
+        $stock = Stock::create([
+            'stock_id' => $stockId,
+            'dish_id' => $validated['dish_id'],
+            'quantity_start' => $qty,
+            'quantity_left' => $qty,
         ]);
 
         return response()->json([
-            'data' => $stock,
-            'message' => 'Stock marked as replaced',
-        ]);
-    }
-
-    /**
-     * Get stock revenue report
-     */
-    public function revenueReport(Request $request)
-    {
-        $dateFrom = $request->get('date_from');
-        $dateTo = $request->get('date_to');
-
-        $query = Stock::with('dish');
-
-        if ($dateFrom) {
-            $query->whereDate('created_at', '>=', $dateFrom);
-        }
-        if ($dateTo) {
-            $query->whereDate('created_at', '<=', $dateTo);
-        }
-
-        $stocks = $query->get();
-
-        $report = $stocks->map(function ($stock) {
-            $revenue = $stock->getRevenueFromDish();
-            return [
-                'id' => $stock->id,
-                'dish' => $stock->dish,
-                'quantity_start' => $stock->quantity_start,
-                'quantity_left' => $stock->quantity_left,
-                'cost_per_unit' => $stock->cost_per_unit,
-                'total_cost' => $stock->quantity_start * $stock->cost_per_unit,
-                'revenue' => $revenue,
-                'profit' => $revenue - ($stock->quantity_start * $stock->cost_per_unit),
-            ];
-        });
-
-        return response()->json([
-            'data' => $report,
-            'summary' => [
-                'total_cost' => $report->sum('total_cost'),
-                'total_revenue' => $report->sum('revenue'),
-                'total_profit' => $report->sum('profit'),
-            ],
-        ]);
+            'data' => $stock->load('dish'),
+            'message' => 'Stock created successfully',
+        ], 201);
     }
 }

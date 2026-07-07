@@ -251,13 +251,17 @@ class DatabaseSeeder extends Seeder
         ]);
 
         // 7. Seed Stocks
+        $generator = new \App\Services\OrderCodeGenerator();
+        $today = now()->format('Y-m-d');
         $dishes = DB::table('dishes')->get();
         foreach ($dishes as $dish) {
             DB::table('stocks')->insert([
+                'stock_id' => $generator->generateStockId($dish->dish_id, $today),
                 'dish_id' => $dish->dish_id,
-                'quantity_start' => 200,
-                'quantity_left' => 200,
+                'quantity_start' => 50,
+                'quantity_left' => 50,  
                 'updated_at' => now(),
+                'created_at' => now(),
             ]);
         }
 
