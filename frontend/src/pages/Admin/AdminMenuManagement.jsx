@@ -17,7 +17,7 @@ const getImageUrl = (imageUrl) => {
     return `${API_BASE_URL}/dishes/${cleanPath}`;
 };
 
-const MenuManagement = () => {
+const AdminMenuManagement = () => {
     const [dishes, setDishes] = useState([]);
     const [dishTypes, setDishTypes] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -391,4 +391,4 @@ const MenuManagement = () => {
     );
 };
 
-export default MenuManagement;
+export default AdminMenuManagement;

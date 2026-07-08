@@ -265,6 +265,8 @@ class DatabaseSeeder extends Seeder
             ]);
         }
 
+        $this->call(OrdersSeeder::class);
+
         $this->command->info('✅ CSDL mới đã được seed thành công với dữ liệu của bạn!');
-    }
+    }        
 }

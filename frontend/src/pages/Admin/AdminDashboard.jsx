@@ -16,26 +16,29 @@ const AdminDashboard = () => {
     const fetchDashboard = async () => {
         try {
             setLoading(true);
-            const [dashboardRes, revenueRes, bestsellersRes, typesRes, performanceRes, retentionRes] = await Promise.all([
-                adminService.getDashboard(),
-                adminService.getRevenueReport('day'),
-                adminService.getBestsellersReport(),
-                adminService.getSalesByType(),
-                adminService.getDeliveryPerformance(),
-                adminService.getCustomerRetention(),
+
+            // Use adminAPI (safe known endpoints). Some older helper methods were named adminService.*
+            const [dashboardRes, revenueRes, bestsellersRes] = await Promise.all([
+                adminAPI.dashboard.get(),
+                adminAPI.statistics.revenue({ period: 'day' }),
+                adminAPI.statistics.bestsellers(),
             ]);
 
-            setDashboard(dashboardRes.data.data);
+            setDashboard(dashboardRes?.data?.data || dashboardRes?.data || {});
             setReports({
-                revenue: revenueRes.data.data,
-                bestsellers: bestsellersRes.data.data,
-                types: typesRes.data.data,
-                performance: performanceRes.data.data,
-                retention: retentionRes.data.data,
+                revenue: revenueRes?.data?.data || revenueRes?.data || [],
+                bestsellers: bestsellersRes?.data?.data || bestsellersRes?.data || [],
+                types: [],
+                performance: {},
+                retention: {},
             });
         } catch (err) {
-            setError('Lỗi tải dashboard');
             console.error(err);
+            const resp = err?.response;
+            const msg = resp
+                ? `Lỗi API ${resp.status}: ${resp.data?.message || JSON.stringify(resp.data)}`
+                : (err.message || 'Lỗi tải dashboard');
+            setError(msg);
         } finally {
             setLoading(false);
         }

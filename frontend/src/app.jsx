@@ -28,14 +28,13 @@ import OrderTrackingPage from './pages/Order/OrderTrackingPage';
 import CartPage from './pages/Order/CartPage';
 import CheckoutPage from './pages/Order/CheckoutPage';
 import DeliveriesPage from './pages/Delivery/DeliveriesPage';
-import AdminDashboard from './pages/Admin/AdminDashboard';
 import AdminUsersPage from './pages/Admin/AdminUsersPage';
 import AdminStockPage from './pages/Admin/AdminStockPage';
 import AdminDeliveriesPage from './pages/Admin/AdminDeliveriesPage';
 import SalesReportPage from './pages/Admin/SalesReportPage';
-import AnalyticsDashboardPage from './pages/Admin/AnalyticsDashboardPage';
+import AdminDashboardPage from './pages/Admin/AdminDashboardPage';
 import AdminSettingsPage from './pages/Admin/AdminSettingsPage';
-import MenuManagement from './pages/Admin/MenuManagement';
+import AdminMenuManagement from './pages/Admin/AdminMenuManagement';
 import OrderManagement from './pages/Admin/OrderManagement';
 
 (function handleGoogleAuthRedirect() {
@@ -97,15 +96,12 @@ function App() {
               <Route path="/deliveries" element={<ProtectedRoute><DeliveriesPage /></ProtectedRoute>} />
 
               {/* Admin Routes */}
-              <Route path="/admin/dashboard" element={<ProtectedRoute requireAdmin={true}><AdminDashboard /></ProtectedRoute>} />
+              <Route path="/admin/dashboard" element={<ProtectedRoute requireAdmin={true}><AdminDashboardPage /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute requireAdmin={true}><AdminUsersPage /></ProtectedRoute>} />
               <Route path="/admin/stocks" element={<ProtectedRoute requireAdmin={true}><AdminStockPage /></ProtectedRoute>} />
               <Route path="/admin/deliveries" element={<ProtectedRoute requireAdmin={true}><AdminDeliveriesPage /></ProtectedRoute>} />
               <Route path="/admin/sales" element={<ProtectedRoute requireAdmin={true}><SalesReportPage /></ProtectedRoute>} />
-              <Route path="/admin/analytics" element={<ProtectedRoute requireAdmin={true}><AnalyticsDashboardPage /></ProtectedRoute>} />
               <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminSettingsPage /></ProtectedRoute>} />
-              <Route path="/admin/menu" element={<ProtectedRoute requireAdmin={true}><MenuManagement /></ProtectedRoute>} />
-              <Route path="/admin/orders" element={<ProtectedRoute requireAdmin={true}><OrderManagement /></ProtectedRoute>} />
 
               {/*Payment*/}
               <Route path="/payment-result" element={<PaymentResultPage />} />

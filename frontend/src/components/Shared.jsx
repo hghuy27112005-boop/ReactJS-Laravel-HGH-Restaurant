@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 export const Loading = () => (
     <div className="flex justify-center items-center min-h-screen">
@@ -6,16 +6,38 @@ export const Loading = () => (
     </div>
 );
 
-export const ErrorMessage = ({ message, onClose }) => (
-    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-        <span className="block">{message}</span>
-        {onClose && (
-            <button onClick={onClose} className="absolute top-0 bottom-0 right-0 px-4 py-3">
-                ✕
-            </button>
-        )}
-    </div>
-);
+export const ErrorMessage = ({ message, onClose }) => {
+    const [showDetails, setShowDetails] = useState(false);
+    const isJsonLike = typeof message === 'string' && /[\{\[]/.test(message);
+
+    return (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+            <div className="flex items-start justify-between gap-4">
+                <span className="block flex-1">{typeof message === 'string' ? message : String(message)}</span>
+                <div className="flex items-center gap-2">
+                    {isJsonLike && (
+                        <button
+                            onClick={() => setShowDetails(s => !s)}
+                            className="text-sm px-3 py-1 border rounded bg-white"
+                        >
+                            {showDetails ? 'Ẩn chi tiết' : 'Chi tiết'}
+                        </button>
+                    )}
+                    {onClose && (
+                        <button onClick={onClose} className="px-3 py-1">
+                            ✕
+                        </button>
+                    )}
+                </div>
+            </div>
+            {showDetails && (
+                <pre className="mt-3 p-3 bg-white text-xs rounded overflow-auto text-left" style={{ maxHeight: 240 }}>
+                    {message}
+                </pre>
+            )}
+        </div>
+    );
+};
 
 export const SuccessMessage = ({ message, onClose }) => (
     <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-4">
@@ -93,8 +115,8 @@ export const Button = ({ variant = 'primary', size = 'md', children, disabled, .
     );
 };
 
-export const Card = ({ title, children, footer }) => (
-    <div className="bg-white rounded-lg shadow p-6">
+export const Card = ({ title, children, footer, className = '' }) => (
+    <div className={`bg-white rounded-lg shadow p-6 ${className}`}>
         {title && <h3 className="text-lg font-semibold mb-4">{title}</h3>}
         {children}
         {footer && <div className="mt-4 pt-4 border-t">{footer}</div>}

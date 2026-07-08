@@ -22,7 +22,7 @@ resources/js/
     ├── Profile/
     │   └── ProfileApp.jsx
     └── Admin/
-        ├── MenuManagementApp.jsx
+        ├── AdminMenuManagementApp.jsx
         └── TransactionManagementApp.jsx
 ```
 

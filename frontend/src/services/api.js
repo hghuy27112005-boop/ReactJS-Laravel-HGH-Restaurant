@@ -157,7 +157,7 @@ export const stockAPI = {
 // Admin APIs
 export const adminAPI = {
     dashboard: {
-        get: () => axiosInstance.get('/admin/dashboard'),
+        get: (filters = {}) => axiosInstance.get('/admin/dashboard', { params: filters }),
     },
     bills: {
         getAll: (filters = {}) =>
@@ -212,10 +212,12 @@ export const adminAPI = {
     statistics: {
         revenue: (filters = {}) =>
             axiosInstance.get('/admin/statistics/revenue', { params: filters }),
-        bestsellers: () =>
-            axiosInstance.get('/admin/statistics/bestsellers'),
+        bestsellers: (filters = {}) =>
+            axiosInstance.get('/admin/statistics/bestsellers', { params: filters }),
         customers: (filters = {}) =>
             axiosInstance.get('/admin/statistics/customers', { params: filters }),
+        availableMonths: () =>
+            axiosInstance.get('/admin/statistics/available-months'),
     },
 };
 

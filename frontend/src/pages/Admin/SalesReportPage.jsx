@@ -15,11 +15,15 @@ const SalesReportPage = () => {
     const fetchReport = async () => {
         try {
             setLoading(true);
-            const response = await adminService.getRevenueReport(period);
-            setReport(response.data.data);
+            const response = await adminAPI.statistics.revenue({ period });
+            setReport(response.data?.data || response.data || []);
         } catch (err) {
-            setError('Lỗi tải báo cáo');
             console.error(err);
+            const resp = err?.response;
+            const msg = resp
+                ? `Lỗi API ${resp.status}: ${resp.data?.message || JSON.stringify(resp.data)}`
+                : (err.message || 'Lỗi tải báo cáo');
+            setError(msg);
         } finally {
             setLoading(false);
         }

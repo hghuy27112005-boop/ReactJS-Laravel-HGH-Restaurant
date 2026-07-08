@@ -59,7 +59,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // Points & Statistics
     Route::get('points', [\App\Http\Controllers\PointsController::class, 'userPoints']);
-    Route::get('statistics/user', [\App\Http\Controllers\StatisticsController::class, 'userStats']);
+    Route::get('statistics/user', [\App\Http\Controllers\Admin_StatisticsController::class, 'userStats']);
 
     // Discounts
     Route::get('discounts', [\App\Http\Controllers\DiscountController::class, 'userDiscounts']);
@@ -108,10 +108,12 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::apiResource('admin/sale-off-events', \App\Http\Controllers\Admin\Admin_SaleOffEventController::class);
     Route::apiResource('admin/discounts', \App\Http\Controllers\Admin\Admin_DiscountController::class);
 
+    Route::get('admin/statistics/available-months', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'availableMonths']);
+
     // Statistics
-    Route::get('admin/statistics/revenue', [\App\Http\Controllers\Admin\StatisticsController::class, 'revenue']);
-    Route::get('admin/statistics/bestsellers', [\App\Http\Controllers\Admin\StatisticsController::class, 'bestsellers']);
-    Route::get('admin/statistics/customers', [\App\Http\Controllers\Admin\StatisticsController::class, 'customers']);
+    Route::get('admin/statistics/revenue', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'revenue']);
+    Route::get('admin/statistics/bestsellers', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'bestsellers']);
+    Route::get('admin/statistics/customers', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'customers']);
 });
 
 Route::post('/vnpay/create-payment-url', [VnpayController::class, 'createPaymentUrl']);
