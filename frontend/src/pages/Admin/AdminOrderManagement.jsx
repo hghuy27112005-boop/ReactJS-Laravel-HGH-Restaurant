@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { adminAPI, billAPI } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge } from '../../components/Shared';
 
-const OrderManagement = () => {
+const AdminOrderManagement = () => {
     const [bills, setBills] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -449,4 +449,4 @@ const OrderManagement = () => {
     );
 };
 
-export default OrderManagement;
+export default AdminOrderManagement;

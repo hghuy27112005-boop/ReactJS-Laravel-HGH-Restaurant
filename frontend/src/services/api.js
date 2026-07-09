@@ -212,12 +212,20 @@ export const adminAPI = {
     statistics: {
         revenue: (filters = {}) =>
             axiosInstance.get('/admin/statistics/revenue', { params: filters }),
+        revenueSummary: (filters = {}) =>
+            axiosInstance.get('/admin/statistics/revenue-summary', { params: filters }),
+        revenueByMonthRange: (filters = {}) =>
+            axiosInstance.get('/admin/statistics/revenue-by-month-range', { params: filters }),
+        revenueByYear: (filters = {}) =>
+            axiosInstance.get('/admin/statistics/revenue-by-year', { params: filters }),
         bestsellers: (filters = {}) =>
             axiosInstance.get('/admin/statistics/bestsellers', { params: filters }),
         customers: (filters = {}) =>
             axiosInstance.get('/admin/statistics/customers', { params: filters }),
         availableMonths: () =>
             axiosInstance.get('/admin/statistics/available-months'),
+        availableYears: () =>
+            axiosInstance.get('/admin/statistics/available-years'),
     },
 };
 

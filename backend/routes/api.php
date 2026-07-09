@@ -109,9 +109,13 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::apiResource('admin/discounts', \App\Http\Controllers\Admin\Admin_DiscountController::class);
 
     Route::get('admin/statistics/available-months', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'availableMonths']);
+    Route::get('admin/statistics/available-years', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'availableYears']);
 
     // Statistics
     Route::get('admin/statistics/revenue', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'revenue']);
+    Route::get('admin/statistics/revenue-summary', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'revenueSummary']);
+    Route::get('admin/statistics/revenue-by-month-range', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'revenueByMonthRange']);
+    Route::get('admin/statistics/revenue-by-year', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'revenueByYear']);
     Route::get('admin/statistics/bestsellers', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'bestsellers']);
     Route::get('admin/statistics/customers', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'customers']);
 });

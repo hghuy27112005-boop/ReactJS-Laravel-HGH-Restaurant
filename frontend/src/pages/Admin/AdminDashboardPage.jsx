@@ -13,7 +13,7 @@ const AdminDashboardPage = () => {
     const [error, setError] = useState(null);
 
     const [availableMonths, setAvailableMonths] = useState([]);
-    const [selectedMonth, setSelectedMonth] = useState(null);
+    const [selectedMonth, setSelectedMonth] = useState(null); // 'YYYY-MM'
 
     const [summary, setSummary] = useState(null);
     const [revenueData, setRevenueData] = useState([]);
@@ -23,6 +23,11 @@ const AdminDashboardPage = () => {
 
     const [topCustomers, setTopCustomers] = useState([]);
     const [customersPeriod, setCustomersPeriod] = useState('month');
+
+    // Modal chọn tháng
+    const [showMonthModal, setShowMonthModal] = useState(false);
+    const [modalYear, setModalYear] = useState('');
+    const [modalMonth, setModalMonth] = useState('');
 
     useEffect(() => {
         initLoad();
@@ -108,22 +113,34 @@ const AdminDashboardPage = () => {
 
     if (loading) return <Loading />;
 
-    const monthOptions = availableMonths.map((m) => ({
-        value: `${m.year}-${String(m.month).padStart(2, '0')}`,
-        label: `${m.month}/${m.year}`,
-    }));
-
     const now = new Date();
     const currentValue = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    if (selectedMonth && !monthOptions.find((m) => m.value === selectedMonth)) {
-        monthOptions.unshift({ value: selectedMonth, label: `${selectedMonth.split('-')[1]}/${selectedMonth.split('-')[0]} (chưa có dữ liệu)` });
-    }
-
-    const [selYearStr, selMonthStr] = (selectedMonth || currentValue).split('-');
+    const activeMonth = selectedMonth || currentValue;
+    const [selYearStr, selMonthStr] = activeMonth.split('-');
     const selYear = Number(selYearStr);
     const selMonthNum = Number(selMonthStr);
-    const totalDaysInMonth = new Date(selYear, selMonthNum, 0).getDate();
 
+    const yearsList = [...new Set((availableMonths || []).map((m) => m.year))].sort((a, b) => b - a);
+    const monthsOfModalYear = modalYear
+        ? (availableMonths || [])
+            .filter((m) => String(m.year) === String(modalYear))
+            .map((m) => m.month)
+            .sort((a, b) => a - b)
+        : [];
+
+    const openMonthModal = () => {
+        setModalYear(String(selYear));
+        setModalMonth(String(selMonthNum));
+        setShowMonthModal(true);
+    };
+
+    const handleConfirmMonth = () => {
+        if (!modalYear || !modalMonth) return;
+        setSelectedMonth(`${modalYear}-${String(modalMonth).padStart(2, '0')}`);
+        setShowMonthModal(false);
+    };
+
+    const totalDaysInMonth = new Date(selYear, selMonthNum, 0).getDate();
     const revenueMap = {};
     (revenueData || []).forEach((d) => {
         const dayNum = parseInt((d.date || '').slice(8, 10), 10);
@@ -139,18 +156,12 @@ const AdminDashboardPage = () => {
             <div className="max-w-7xl mx-auto px-4">
                 <div className="flex items-center justify-between mb-8 flex-wrap gap-4">
                     <h1 className="text-4xl font-bold text-red-600">Dashboard</h1>
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm text-gray-600">Chọn tháng:</label>
-                        <select
-                            value={selectedMonth || ''}
-                            onChange={(e) => setSelectedMonth(e.target.value)}
-                            className="border rounded px-3 py-1"
-                        >
-                            {monthOptions.map((m) => (
-                                <option key={m.value} value={m.value}>{m.label}</option>
-                            ))}
-                        </select>
-                    </div>
+                    <button
+                        onClick={openMonthModal}
+                        className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700"
+                    >
+                        Chọn tháng
+                    </button>
                 </div>
 
                 {error && <ErrorMessage message={error} onClose={() => setError(null)} />}
@@ -282,6 +293,74 @@ const AdminDashboardPage = () => {
                     </Card>
                 </div>
             </div>
+
+            {/* Modal chọn tháng */}
+            {showMonthModal && (
+                <div
+                    className="fixed inset-0 flex items-center justify-center z-50"
+                    style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+                    onClick={() => setShowMonthModal(false)}
+                >
+                    <div
+                        className="bg-white rounded-lg shadow-lg max-w-sm w-full mx-4 overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="px-6 py-3 bg-red-600 text-white font-semibold text-lg">
+                            Chọn tháng
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm text-gray-600 mb-1">Chọn năm</label>
+                                <select
+                                    value={modalYear}
+                                    onChange={(e) => {
+                                        setModalYear(e.target.value);
+                                        setModalMonth('');
+                                    }}
+                                    className="border rounded px-3 py-2 w-full"
+                                >
+                                    <option value="">-- Chọn năm --</option>
+                                    {yearsList.map((y) => (
+                                        <option key={y} value={y}>{y}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm text-gray-600 mb-1">Chọn tháng</label>
+                                <select
+                                    value={modalMonth}
+                                    disabled={!modalYear}
+                                    onChange={(e) => setModalMonth(e.target.value)}
+                                    className="border rounded px-3 py-2 w-full disabled:bg-gray-100"
+                                >
+                                    <option value="">-- Chọn tháng --</option>
+                                    {monthsOfModalYear.map((m) => (
+                                        <option key={m} value={m}>Tháng {m}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-2">
+                                <button
+                                    onClick={() => setShowMonthModal(false)}
+                                    className="px-4 py-2 rounded border border-gray-300 hover:bg-gray-100"
+                                >
+                                    Đóng
+                                </button>
+                                <button
+                                    onClick={handleConfirmMonth}
+                                    disabled={!modalYear || !modalMonth}
+                                    className="px-4 py-2 rounded bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-300"
+                                >
+                                    Xác nhận lọc
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

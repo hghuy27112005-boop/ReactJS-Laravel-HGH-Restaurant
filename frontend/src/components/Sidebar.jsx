@@ -10,7 +10,7 @@ const Sidebar = ({ isOpen, onClose }) => {
         { path: '/admin/users', icon: '👥', label: 'Khách hàng' },
         { path: '/admin/stock', icon: '📦', label: 'Kho hàng' },
         { path: '/admin/deliveries', icon: '🚗', label: 'Giao hàng' },
-        { path: '/admin/sales', icon: '📈', label: 'Bán hàng' },
+        { path: '/admin/revenue', icon: '📈', label: 'Bán hàng' },
         { path: '/admin/analytics', icon: '📉', label: 'Phân tích' },
         { path: '/admin/reports', icon: '📋', label: 'Báo cáo' },
     ];
@@ -27,9 +27,8 @@ const Sidebar = ({ isOpen, onClose }) => {
 
             {/* Sidebar */}
             <aside
-                className={`fixed left-0 top-0 h-screen w-64 bg-gray-900 text-white overflow-y-auto transform transition-transform duration-300 z-40 ${
-                    isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
-                }`}
+                className={`fixed left-0 top-0 h-screen w-64 bg-gray-900 text-white overflow-y-auto transform transition-transform duration-300 z-40 ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+                    }`}
             >
                 {/* Header */}
                 <div className="p-6 border-b border-gray-800">
@@ -46,11 +45,10 @@ const Sidebar = ({ isOpen, onClose }) => {
                                 navigate(item.path);
                                 onClose();
                             }}
-                            className={`w-full text-left px-4 py-3 rounded-lg transition ${
-                                location.pathname === item.path
+                            className={`w-full text-left px-4 py-3 rounded-lg transition ${location.pathname === item.path
                                     ? 'bg-red-600 text-white'
                                     : 'text-gray-300 hover:bg-gray-800'
-                            }`}
+                                }`}
                         >
                             <span className="text-lg mr-2">{item.icon}</span>
                             {item.label}

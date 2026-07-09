@@ -31,11 +31,10 @@ import DeliveriesPage from './pages/Delivery/DeliveriesPage';
 import AdminUsersPage from './pages/Admin/AdminUsersPage';
 import AdminStockPage from './pages/Admin/AdminStockPage';
 import AdminDeliveriesPage from './pages/Admin/AdminDeliveriesPage';
-import SalesReportPage from './pages/Admin/SalesReportPage';
+import AdminRevenuePage from './pages/Admin/AdminRevenuePage';
 import AdminDashboardPage from './pages/Admin/AdminDashboardPage';
-import AdminSettingsPage from './pages/Admin/AdminSettingsPage';
 import AdminMenuManagement from './pages/Admin/AdminMenuManagement';
-import OrderManagement from './pages/Admin/OrderManagement';
+import AdminOrderManagement from './pages/Admin/AdminOrderManagement';
 
 (function handleGoogleAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
@@ -99,10 +98,10 @@ function App() {
               <Route path="/admin/dashboard" element={<ProtectedRoute requireAdmin={true}><AdminDashboardPage /></ProtectedRoute>} />
               <Route path="/admin/users" element={<ProtectedRoute requireAdmin={true}><AdminUsersPage /></ProtectedRoute>} />
               <Route path="/admin/stocks" element={<ProtectedRoute requireAdmin={true}><AdminStockPage /></ProtectedRoute>} />
+              <Route path="/admin/menu" element={<ProtectedRoute requireAdmin={true}><AdminMenuManagement /></ProtectedRoute>} />
+              <Route path="/admin/orders" element={<ProtectedRoute requireAdmin={true}><AdminOrderManagement /></ProtectedRoute>} />
               <Route path="/admin/deliveries" element={<ProtectedRoute requireAdmin={true}><AdminDeliveriesPage /></ProtectedRoute>} />
-              <Route path="/admin/sales" element={<ProtectedRoute requireAdmin={true}><SalesReportPage /></ProtectedRoute>} />
-              <Route path="/admin/settings" element={<ProtectedRoute requireAdmin={true}><AdminSettingsPage /></ProtectedRoute>} />
-
+              <Route path="/admin/revenue" element={<ProtectedRoute requireAdmin={true}><AdminRevenuePage /></ProtectedRoute>} />
               {/*Payment*/}
               <Route path="/payment-result" element={<PaymentResultPage />} />
               <Route path="/refund-result" element={<RefundResultPage />} />
