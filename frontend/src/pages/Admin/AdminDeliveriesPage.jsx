@@ -11,6 +11,7 @@ const AdminDeliveriesPage = () => {
     const [tempSearch, setTempSearch] = useState('');
     const [pagination, setPagination] = useState({});
     const [currentPage, setCurrentPage] = useState(1);
+    const [pageInput, setPageInput] = useState('1');
     const [selectedDelivery, setSelectedDelivery] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [overallStats, setOverallStats] = useState({ total: 0, pending: 0, shipping: 0, completed: 0, cancelled: 0 });
@@ -33,38 +34,48 @@ const AdminDeliveriesPage = () => {
     };
 
     useEffect(() => {
-        fetchOverallStats();
-    }, []);
-
-    useEffect(() => {
         fetchDeliveries();
     }, [filter, search, currentPage]);
 
+    useEffect(() => {
+        setPageInput(String(currentPage));
+    }, [currentPage]);
+
+    useEffect(() => {
+        fetchOverallStats();
+    }, []);
+
     const fetchOverallStats = async () => {
         try {
-            const response = await adminAPI.deliveries.getAll({ per_page: 10000 });
-            const allDelivs = extractListData(response);
-            setOverallStats({
-                total: response?.data?.pagination?.total || allDelivs.length,
-                pending: allDelivs.filter(d => ['waiting_info', 'waiting_confirmation', 'waiting_approval'].includes(d.delivery_status)).length,
-                shipping: allDelivs.filter(d => d.delivery_status === 'shipping').length,
-                completed: allDelivs.filter(d => d.delivery_status === 'completed').length,
-                cancelled: allDelivs.filter(d => d.delivery_status === 'cancelled').length,
-            });
+            const { dateFrom, dateTo } = getDateRange();
+            const response = await adminAPI.deliveries.getStats({ date_from: dateFrom, date_to: dateTo });
+            setOverallStats(response?.data?.data || { total: 0, pending: 0, shipping: 0, completed: 0, cancelled: 0 });
         } catch (err) {
             console.error('Lỗi tải thống kê tổng', err);
         }
+    };
+
+    const getDateRange = () => {
+        const now = new Date();
+        const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const dateFrom = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}-01`;
+        const lastDayCurrent = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const dateTo = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(lastDayCurrent).padStart(2, '0')}`;
+        return { dateFrom, dateTo };
     };
 
     const fetchDeliveries = async () => {
         try {
             setLoading(true);
             setError(null);
+            const { dateFrom, dateTo } = getDateRange();
             const filters = {
                 search: search || undefined,
                 delivery_status: filter === 'all' ? undefined : (filter === 'waiting_confirmation' ? 'waiting_confirmation,waiting_approval' : filter),
+                date_from: dateFrom,
+                date_to: dateTo,
                 page: currentPage,
-                per_page: 10,
+                per_page: 25,
             };
             const response = await adminAPI.deliveries.getAll(filters);
             setDeliveries(extractListData(response));
@@ -114,6 +125,14 @@ const AdminDeliveriesPage = () => {
         }
     };
 
+    const goToPage = () => {
+        let page = parseInt(pageInput, 10);
+        if (isNaN(page) || page < 1) page = 1;
+        if (page > pagination.last_page) page = pagination.last_page;
+        setPageInput(String(page));
+        setCurrentPage(page);
+    };
+
     const getActionButtons = (delivery) => {
         switch (delivery.delivery_status) {
             case 'waiting_approval':
@@ -149,6 +168,14 @@ const AdminDeliveriesPage = () => {
                 <h1 className="text-4xl font-bold mb-8 text-red-600">Quản lý giao hàng</h1>
 
                 {error && <ErrorMessage message={error} />}
+
+                <p className="text-red-600 font-semibold mb-3">
+                    {(() => {
+                        const now = new Date();
+                        const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                        return `Tháng ${prevMonthDate.getMonth() + 1}/${prevMonthDate.getFullYear()} - Tháng ${now.getMonth() + 1}/${now.getFullYear()}`;
+                    })()}
+                </p>
 
                 {/* Stats */}
                 <div className="grid md:grid-cols-5 gap-4 mb-8">
@@ -209,7 +236,7 @@ const AdminDeliveriesPage = () => {
                 <Card title={`Danh sách giao hàng (${pagination.total || deliveries.length})`}>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm">
-                            <thead className="bg-gray-100 border-b">
+                            <thead className="bg-red-600 text-white border-b">
                                 <tr>
                                     <th className="px-4 py-2 text-left">ID Giao Hàng</th>
                                     <th className="px-4 py-2 text-left">Khách hàng</th>
@@ -272,19 +299,26 @@ const AdminDeliveriesPage = () => {
 
                     {/* Pagination */}
                     {pagination.last_page > 1 && (
-                        <div className="flex justify-center items-center gap-2 mt-4 pt-4 border-t">
-                            {Array.from({ length: pagination.last_page }, (_, i) => i + 1).map(page => (
-                                <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={`px-3 py-1 rounded text-sm ${currentPage === page
-                                        ? 'bg-red-600 text-white'
-                                        : 'bg-white border border-gray-300 hover:bg-gray-50'
-                                        }`}
-                                >
-                                    {page}
-                                </button>
-                            ))}
+                        <div className="flex justify-center items-center gap-2 mt-4 pt-4 border-t text-sm">
+                            <span>Trang</span>
+                            <input
+                                type="number"
+                                min={1}
+                                max={pagination.last_page}
+                                value={pageInput}
+                                onChange={(e) => setPageInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') goToPage();
+                                }}
+                                className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                            />
+                            <span>/ {pagination.last_page}</span>
+                            <button
+                                onClick={goToPage}
+                                className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                            >
+                                Đi tới
+                            </button>
                         </div>
                     )}
                 </Card>

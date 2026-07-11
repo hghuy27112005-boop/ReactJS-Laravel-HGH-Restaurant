@@ -35,6 +35,8 @@ import AdminRevenuePage from './pages/Admin/AdminRevenuePage';
 import AdminDashboardPage from './pages/Admin/AdminDashboardPage';
 import AdminMenuManagement from './pages/Admin/AdminMenuManagement';
 import AdminOrderManagement from './pages/Admin/AdminOrderManagement';
+import AdminReportPage from './pages/Admin/AdminReportPage';
+
 
 (function handleGoogleAuthRedirect() {
   const params = new URLSearchParams(window.location.search);
@@ -102,6 +104,7 @@ function App() {
               <Route path="/admin/orders" element={<ProtectedRoute requireAdmin={true}><AdminOrderManagement /></ProtectedRoute>} />
               <Route path="/admin/deliveries" element={<ProtectedRoute requireAdmin={true}><AdminDeliveriesPage /></ProtectedRoute>} />
               <Route path="/admin/revenue" element={<ProtectedRoute requireAdmin={true}><AdminRevenuePage /></ProtectedRoute>} />
+              <Route path="/admin/reports" element={<ProtectedRoute requireAdmin={true}><AdminReportPage /></ProtectedRoute>} />
               {/*Payment*/}
               <Route path="/payment-result" element={<PaymentResultPage />} />
               <Route path="/refund-result" element={<RefundResultPage />} />

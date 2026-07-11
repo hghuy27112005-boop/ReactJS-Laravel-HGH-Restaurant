@@ -64,6 +64,37 @@ class Admin_DeliveryController extends Controller
     }
 
     /**
+     * Thống kê tổng số lượng theo từng trạng thái (dùng COUNT, không load toàn bộ record)
+     */
+    public function stats(Request $request)
+    {
+        $base = Delivery::whereIn('delivery_status', ['waiting_approval', 'shipping', 'completed', 'cancelled']);
+
+        if ($request->has('date_from')) {
+            $base->whereDate('created_at', '>=', $request->date_from);
+        }
+        if ($request->has('date_to')) {
+            $base->whereDate('created_at', '<=', $request->date_to);
+        }
+
+        $total = (clone $base)->count();
+        $pending = (clone $base)->whereIn('delivery_status', ['waiting_info', 'waiting_confirmation', 'waiting_approval'])->count();
+        $shipping = (clone $base)->where('delivery_status', 'shipping')->count();
+        $completed = (clone $base)->where('delivery_status', 'completed')->count();
+        $cancelled = (clone $base)->where('delivery_status', 'cancelled')->count();
+
+        return response()->json([
+            'data' => [
+                'total' => $total,
+                'pending' => $pending,
+                'shipping' => $shipping,
+                'completed' => $completed,
+                'cancelled' => $cancelled,
+            ],
+        ]);
+    }
+
+    /**
      * Get single delivery
      */
     public function show(Delivery $delivery)

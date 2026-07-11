@@ -212,7 +212,7 @@ const AdminMenuManagement = () => {
                 <Card title={`Danh sách món ăn (${dishes.length})`}>
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
-                            <thead className="bg-gray-100 text-gray-700 uppercase">
+                            <thead className="bg-red-600 text-white border-b uppercase">
                                 <tr>
                                     <th className="px-4 py-3">STT</th>
                                     <th className="px-4 py-3">Hình ảnh</th>

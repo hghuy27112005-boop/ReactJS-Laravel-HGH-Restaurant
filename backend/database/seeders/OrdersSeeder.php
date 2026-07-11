@@ -200,13 +200,14 @@ class OrdersSeeder extends Seeder
                 DB::table('orders')->where('order_id', $orderId)->update(['subtotal_price' => $subtotal]);
 
                 $billId = $genId('BIL');
+                $paymentMethod = rand(0, 1) ? 'Points' : 'VNPay';
                 DB::table('bills')->insert([
                     'bill_id' => $billId,
                     'order_id' => $orderId,
                     'total_price' => $subtotal,
                     'user_id' => $userId,
                     'vnp_txn_ref' => null,
-                    'payment_method' => 'CASH',
+                    'payment_method' => $paymentMethod,
                     'created_at' => $createdAt,
                 ]);
 
@@ -269,13 +270,14 @@ class OrdersSeeder extends Seeder
                 DB::table('orders')->where('order_id', $orderId)->update(['subtotal_price' => $subtotal]);
 
                 $billId = $genId('BIL');
+                $paymentMethod = rand(0, 1) ? 'Points' : 'VNPay';
                 DB::table('bills')->insert([
                     'bill_id' => $billId,
                     'order_id' => $orderId,
                     'total_price' => $subtotal,
                     'user_id' => $userId,
                     'vnp_txn_ref' => null,
-                    'payment_method' => 'CASH',
+                    'payment_method' => $paymentMethod,
                     'created_at' => $createdAt,
                 ]);
 

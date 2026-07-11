@@ -24,7 +24,7 @@ axiosInstance.interceptors.request.use((config) => {
 axiosInstance.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        if (error.response?.status === 401 && !error.config?.skipAuthRedirect) {
             // Token expired or invalid
             localStorage.removeItem('auth_token');
             localStorage.removeItem('user');
@@ -45,6 +45,9 @@ export const authAPI = {
 // User API
 export const userAPI = {
     getProfile: () => axiosInstance.get('/user'),
+    // Dùng riêng cho polling kiểm tra tài khoản còn tồn tại — không để interceptor
+    // tự động redirect khi 401, vì cần hiện modal thông báo trước rồi mới logout.
+    checkAccountAlive: () => axiosInstance.get('/user', { skipAuthRedirect: true }),
     updateProfile: (data) => axiosInstance.put('/user', data),
     uploadAvatar: (formData) =>
         axiosInstance.post('/user/avatar', formData, {
@@ -126,6 +129,11 @@ export const dishAPI = {
     getDishTypes: () => axiosInstance.get('/dish-types'),
 };
 
+// Server time API (public)
+export const serverTimeAPI = {
+    get: () => axiosInstance.get('/server-time'),
+};
+
 // Points API
 export const pointsAPI = {
     getUserPoints: () => axiosInstance.get('/points'),
@@ -168,6 +176,8 @@ export const adminAPI = {
     deliveries: {
         getAll: (filters = {}) =>
             axiosInstance.get('/admin/deliveries', { params: filters }),
+        getStats: (filters = {}) =>
+            axiosInstance.get('/admin/deliveries/stats', { params: filters }),
         getById: (id) =>
             axiosInstance.get(`/admin/deliveries/${id}`),
         approve: (id) =>
@@ -208,6 +218,8 @@ export const adminAPI = {
             axiosInstance.get('/admin/users', { params: filters }),
         update: (id, data) =>
             axiosInstance.put(`/admin/users/${id}`, data),
+        delete: (id) =>
+            axiosInstance.delete(`/admin/users/${id}`),
     },
     statistics: {
         revenue: (filters = {}) =>
@@ -224,6 +236,14 @@ export const adminAPI = {
             axiosInstance.get('/admin/statistics/customers', { params: filters }),
         availableMonths: () =>
             axiosInstance.get('/admin/statistics/available-months'),
+        orderCountsByMonth: (filters = {}) =>
+            axiosInstance.get('/admin/statistics/order-counts-by-month', { params: filters }),
+        dishQuantityByMonth: (filters = {}) =>
+            axiosInstance.get('/admin/statistics/dish-quantity-by-month', { params: filters }),
+        dishTrendByMonthRange: (filters = {}) =>
+            axiosInstance.get('/admin/statistics/dish-trend-by-month-range', { params: filters }),
+        peakHours: (filters = {}) =>
+            axiosInstance.get('/admin/statistics/peak-hours', { params: filters }),
         availableYears: () =>
             axiosInstance.get('/admin/statistics/available-years'),
     },

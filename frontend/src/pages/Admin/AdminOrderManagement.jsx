@@ -287,7 +287,7 @@ const AdminOrderManagement = () => {
                     <Card title={`Danh sách hóa đơn (${bills.length})`} className="border-none shadow-none">
                         <div className="overflow-x-auto min-h-[400px]">
                             <table className="w-full text-sm text-left">
-                                <thead className="bg-gray-100 text-gray-700 uppercase">
+                                <thead className="bg-red-600 text-white border-b">
                                     <tr>
                                         <th className="px-2 py-3 text-center">Mã HĐ</th>
                                         <th className="px-2 py-3">ID User</th>
@@ -401,7 +401,7 @@ const AdminOrderManagement = () => {
                                         {Number(detailBill.order?.subtotal_price || detailBill.total_price || 0).toLocaleString('vi-VN')}đ
                                     </td>
                                 </tr>
-                                {detailBill.payment_method === 'vnpay' && (Number(detailBill.order?.subtotal_price || 0) > Number(detailBill.total_price)) && (
+                                {detailBill.payment_method === 'VNPay' && (Number(detailBill.order?.subtotal_price || 0) > Number(detailBill.total_price)) && (
                                     <tr>
                                         <td colSpan={2} className="py-2 px-3 font-bold border border-black text-orange-500">Giảm giá VNPay:</td>
                                         <td className="py-2 px-3 text-right font-bold text-orange-500 border border-black">
@@ -419,7 +419,7 @@ const AdminOrderManagement = () => {
                                 )}
                                 <tr>
                                     <td colSpan={2} className="py-2 px-3 font-bold border border-black text-red-600">
-                                        {detailBill.payment_method === 'vnpay' ? 'Số tiền đã trả:' : 'Số tiền cần trả:'}
+                                        {detailBill.payment_method === 'VNPay' ? 'Số tiền đã trả:' : 'Số tiền cần trả:'}
                                     </td>
                                     <td className="py-2 px-3 text-right font-bold text-red-600 border border-black">
                                         {Number(detailBill.total_price || 0).toLocaleString('vi-VN')}đ

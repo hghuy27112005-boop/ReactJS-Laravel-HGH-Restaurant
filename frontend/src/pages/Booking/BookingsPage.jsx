@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { bookingService, billService, vnpayService, extractListData, userAPI, orderService, stockAPI } from '../../services/api';
+import { bookingService, billService, vnpayService, extractListData, userAPI, orderService, stockAPI, serverTimeAPI } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState, Modal } from '../../components/Shared';
 import { useAuthContext } from '../../context/AuthContext';
 
@@ -47,6 +47,10 @@ const BookingsPage = () => {
     // Availability
     const [unavailableTables, setUnavailableTables] = useState([]);
     const [isCheckingOverlap, setIsCheckingOverlap] = useState(false);
+
+    // Giờ server thật (offset giữa giờ server và giờ máy khách, tính 1 lần khi tải trang)
+    const [serverOffsetMs, setServerOffsetMs] = useState(0);
+    const getServerNow = () => new Date(Date.now() + serverOffsetMs);
 
     // Lưu trạng thái đã xác nhận vào sessionStorage (bao gồm cart + info)
     const saveCheckoutSession = (stage, formData) => {
@@ -127,6 +131,19 @@ const BookingsPage = () => {
         return () => clearTimeout(timer);
     }, [error]);
 
+    useEffect(() => {
+        const fetchServerTime = async () => {
+            try {
+                const res = await serverTimeAPI.get();
+                const serverNowMs = new Date(res.data.now).getTime();
+                setServerOffsetMs(serverNowMs - Date.now());
+            } catch (err) {
+                console.warn('Không thể lấy giờ server, tạm dùng giờ máy khách:', err);
+            }
+        };
+        fetchServerTime();
+    }, []);
+
     // Đếm ngược 5s→1s rồi tự redirect. Chạy độc lập với việc modal có đang hiển thị hay không,
     // nên kể cả lỡ đóng modal bằng cách khác thì việc reset vẫn xảy ra đúng hẹn.
     useEffect(() => {
@@ -143,10 +160,25 @@ const BookingsPage = () => {
 
     const cartTotal = bookingCart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
+    // Ngày nhỏ nhất/lớn nhất được phép chọn (theo giờ server, khớp giới hạn backend 60 ngày)
+    const toLocalDateStr = (d) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+    const minBookingDateStr = toLocalDateStr(getServerNow());
+    const maxBookingDateStr = toLocalDateStr(new Date(getServerNow().getTime() + 60 * 24 * 60 * 60 * 1000));
+
     const handleNextStep = async () => {
         if (wizardStep === 1) {
             if (!bookingDate || !startH || !startM || !endH || !endM) {
                 alert('Vui lòng chọn ngày và nhập đầy đủ giờ đến, giờ về.');
+                return;
+            }
+
+            // Kiểm tra ngày đặt: không được ở quá khứ, không vượt quá 60 ngày tới (khớp giới hạn backend)
+            if (bookingDate < minBookingDateStr) {
+                alert('Không thể đặt bàn cho ngày trong quá khứ.');
+                return;
+            }
+            if (bookingDate > maxBookingDateStr) {
+                alert('Bạn chỉ có thể đặt bàn trong vòng 60 ngày tới.');
                 return;
             }
 
@@ -179,6 +211,14 @@ const BookingsPage = () => {
             }
             if (endMinutes - startMinutes > 90) {
                 alert('Chỉ được đặt bàn tối đa 90 phút. Vui lòng chỉnh lại thời gian.');
+                return;
+            }
+
+            // Kiểm tra thời điểm đặt (ngày + giờ đến) phải sau giờ hiện tại (server) ít nhất 60 phút
+            const bookingDateTime = new Date(`${bookingDate}T${String(sH).padStart(2, '0')}:${String(sM).padStart(2, '0')}:00`);
+            const minAllowedDateTime = new Date(getServerNow().getTime() + 60 * 60000);
+            if (bookingDateTime < minAllowedDateTime) {
+                alert('Giờ đặt bàn phải cách thời điểm hiện tại ít nhất 60 phút.');
                 return;
             }
 
@@ -717,7 +757,7 @@ const BookingsPage = () => {
                                             <div className="space-y-4 mb-6">
                                                 <div>
                                                     <label className="block text-sm font-semibold mb-1">Ngày đặt</label>
-                                                    <input type="date" value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full border p-2 rounded" />
+                                                    <input type="date" min={minBookingDateStr} max={maxBookingDateStr} value={bookingDate} onChange={e => setBookingDate(e.target.value)} className="w-full border p-2 rounded" />
                                                 </div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div>

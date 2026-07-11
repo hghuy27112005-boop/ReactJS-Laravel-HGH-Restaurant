@@ -175,14 +175,14 @@ const AdminDashboardPage = () => {
                     </Card>
 
                     <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-l-4 border-blue-600">
-                        <p className="text-sm text-gray-600">Tổng đơn (bàn + ship)</p>
+                        <p className="text-sm text-gray-600">Tổng đơn đặt bàn và đặt ship</p>
                         <p className="text-3xl font-bold text-blue-700">
                             {summary?.total_orders ?? 0}
                         </p>
                     </Card>
 
                     <Card className="bg-gradient-to-br from-purple-50 to-purple-100 border-l-4 border-purple-600">
-                        <p className="text-sm text-gray-600">Tổng đặt bàn</p>
+                        <p className="text-sm text-gray-600">Tổng đơn đặt bàn</p>
                         <p className="text-3xl font-bold text-purple-700">
                             {summary?.booking_count ?? 0}
                         </p>
@@ -211,10 +211,14 @@ const AdminDashboardPage = () => {
                                     tickFormatter={(v) => Number(v).toLocaleString('vi-VN')}
                                     allowDecimals={false}
                                 />
-                                <Tooltip formatter={(v) => `${Number(v).toLocaleString('vi-VN')}đ`} />
+                                <Tooltip
+                                    formatter={(v) => `${Number(v).toLocaleString('vi-VN')}đ`}
+                                    labelFormatter={(label) => `Ngày ${label}`}
+                                />
                                 <Line
                                     type="monotone"
                                     dataKey="revenue"
+                                    name="Doanh thu"
                                     stroke={RED}
                                     strokeWidth={2}
                                     dot={{ fill: RED, r: 4 }}

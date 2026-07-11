@@ -23,10 +23,13 @@ const Navbar = () => {
                         <>
                             <Link to="/admin/dashboard" className={isActive('/admin/dashboard') ? 'active' : ''}>Dashboard</Link>
                             <Link to="/admin/revenue" className={isActive('/admin/revenue') ? 'active' : ''}>Doanh thu</Link>
+                            <Link to="/admin/reports" className={isActive('/admin/reports') ? 'active' : ''}>Báo cáo</Link>
+                            <Link to="/admin/users" className={isActive('/admin/users') ? 'active' : ''}>Quản lý người dùng</Link>
                             <Link to="/admin/stocks" className={isActive('/admin/stocks') ? 'active' : ''}>Quản lý kho hàng</Link>
                             <Link to="/admin/menu" className={isActive('/admin/menu') ? 'active' : ''}>Quản lý thực đơn</Link>
                             <Link to="/admin/orders" className={isActive('/admin/orders') ? 'active' : ''}>Quản lý đơn hàng</Link>
                             <Link to="/admin/deliveries" className={isActive('/admin/deliveries') ? 'active' : ''}>Quản lý giao hàng</Link>
+
                         </>
                     ) : (
                         <>

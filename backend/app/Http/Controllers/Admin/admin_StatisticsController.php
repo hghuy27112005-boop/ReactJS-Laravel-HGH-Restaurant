@@ -248,6 +248,232 @@ class Admin_StatisticsController extends Controller
     }
 
     /**
+     * Số đơn/tháng: tổng (bàn+ship), đặt bàn, đặt ship. Loại trừ đơn cancelled.
+     * Bàn tính theo booking_date, ship tính theo created_at.
+     */
+    public function orderCountsByMonth(Request $request)
+    {
+        $year = (int) $request->get('year', now()->year);
+        $month = (int) $request->get('month', now()->month);
+
+        $monthStart = \Carbon\Carbon::create($year, $month, 1)->startOfMonth();
+        $monthEnd = \Carbon\Carbon::create($year, $month, 1)->endOfMonth();
+
+        $bookingCount = DB::table('booking_tables')
+            ->whereBetween('booking_date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+            ->where('booking_status', '<>', 'cancelled')
+            ->count();
+
+        $shipCount = DB::table('deliveries')
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->where('delivery_status', '<>', 'cancelled')
+            ->count();
+
+        return response()->json([
+            'data' => [
+                'total' => $bookingCount + $shipCount,
+                'booking_count' => $bookingCount,
+                'ship_count' => $shipCount,
+            ],
+        ]);
+    }
+
+    /**
+     * Số lượng phần đặt của từng món trong tháng, tách riêng bàn/ship (loại cancelled).
+     * Trả về TẤT CẢ món trong menu, món không có đơn thì count = 0.
+     */
+    public function dishQuantityByMonth(Request $request)
+    {
+        $year = (int) $request->get('year', now()->year);
+        $month = (int) $request->get('month', now()->month);
+
+        $baseQuery = function ($orderType) use ($year, $month) {
+            return DB::table('order_items')
+                ->join('orders', 'order_items.order_id', '=', 'orders.order_id')
+                ->leftJoin('booking_tables', 'orders.order_id', '=', 'booking_tables.order_id')
+                ->leftJoin('deliveries', 'orders.order_id', '=', 'deliveries.order_id')
+                ->where('orders.order_type', $orderType)
+                ->when($orderType === 'booking_table', function ($q) use ($year, $month) {
+                    $q->where('booking_tables.booking_status', '<>', 'cancelled')
+                        ->whereYear('booking_tables.booking_date', $year)
+                        ->whereMonth('booking_tables.booking_date', $month);
+                })
+                ->when($orderType === 'delivery', function ($q) use ($year, $month) {
+                    $q->where('deliveries.delivery_status', '<>', 'cancelled')
+                        ->whereYear('orders.created_at', $year)
+                        ->whereMonth('orders.created_at', $month);
+                })
+                ->select('order_items.dish_id', DB::raw('SUM(order_items.quantity) as count'))
+                ->groupBy('order_items.dish_id')
+                ->get()
+                ->keyBy('dish_id');
+        };
+
+        $bookingSold = $baseQuery('booking_table');
+        $shipSold = $baseQuery('delivery');
+
+        $dishes = DB::table('dishes')->select('dish_id', 'dish_name')->orderBy('dish_id')->get();
+
+        $result = $dishes->map(function ($dish) use ($bookingSold, $shipSold) {
+            $bookingCount = (int) ($bookingSold[$dish->dish_id]->count ?? 0);
+            $shipCount = (int) ($shipSold[$dish->dish_id]->count ?? 0);
+            return [
+                'dish_id' => $dish->dish_id,
+                'name' => $dish->dish_name,
+                'total_count' => $bookingCount + $shipCount,
+                'booking_count' => $bookingCount,
+                'ship_count' => $shipCount,
+            ];
+        });
+
+        return response()->json(['data' => $result]);
+    }
+
+    /**
+     * Xu hướng số lượng đặt của các món đã chọn, theo từng tháng trong khoảng (cùng năm).
+     * Loại trừ đơn cancelled. Booking tính theo booking_date, ship tính theo created_at.
+     */
+    public function dishTrendByMonthRange(Request $request)
+    {
+        $year = (int) $request->get('year');
+        $monthStart = (int) $request->get('month_start');
+        $monthEnd = (int) $request->get('month_end');
+        $dishIds = array_filter((array) $request->get('dish_ids', []));
+
+        if (empty($dishIds)) {
+            return response()->json(['data' => [], 'dishes' => []]);
+        }
+
+        $rangeStartDate = \Carbon\Carbon::create($year, $monthStart, 1)->startOfMonth();
+        $rangeEndDate = \Carbon\Carbon::create($year, $monthEnd, 1)->endOfMonth();
+
+        $bookingRows = DB::table('order_items')
+            ->join('orders', 'order_items.order_id', '=', 'orders.order_id')
+            ->join('booking_tables', 'orders.order_id', '=', 'booking_tables.order_id')
+            ->where('orders.order_type', 'booking_table')
+            ->where('booking_tables.booking_status', '<>', 'cancelled')
+            ->whereIn('order_items.dish_id', $dishIds)
+            ->whereBetween('booking_tables.booking_date', [$rangeStartDate->toDateString(), $rangeEndDate->toDateString()])
+            ->select(
+                DB::raw('EXTRACT(MONTH FROM booking_tables.booking_date)::int as month'),
+                'order_items.dish_id',
+                DB::raw('SUM(order_items.quantity) as count')
+            )
+            ->groupBy('month', 'order_items.dish_id')
+            ->get();
+
+        $shipRows = DB::table('order_items')
+            ->join('orders', 'order_items.order_id', '=', 'orders.order_id')
+            ->join('deliveries', 'orders.order_id', '=', 'deliveries.order_id')
+            ->where('orders.order_type', 'delivery')
+            ->where('deliveries.delivery_status', '<>', 'cancelled')
+            ->whereIn('order_items.dish_id', $dishIds)
+            ->whereBetween('orders.created_at', [$rangeStartDate, $rangeEndDate])
+            ->select(
+                DB::raw('EXTRACT(MONTH FROM orders.created_at)::int as month'),
+                'order_items.dish_id',
+                DB::raw('SUM(order_items.quantity) as count')
+            )
+            ->groupBy('month', 'order_items.dish_id')
+            ->get();
+
+        // Gộp booking + ship theo (month, dish_id)
+        $merged = [];
+        foreach ([$bookingRows, $shipRows] as $rows) {
+            foreach ($rows as $row) {
+                $key = $row->month . '-' . $row->dish_id;
+                $merged[$key] = ($merged[$key] ?? 0) + (int) $row->count;
+            }
+        }
+
+        // Xây mảng kết quả: mỗi tháng trong khoảng, mỗi món đã chọn
+        $dishes = DB::table('dishes')->whereIn('dish_id', $dishIds)->select('dish_id', 'dish_name')->get()->keyBy('dish_id');
+
+        $result = [];
+        for ($m = $monthStart; $m <= $monthEnd; $m++) {
+            $entry = ['month' => $m];
+            foreach ($dishIds as $dishId) {
+                $key = $m . '-' . $dishId;
+                $entry['dish_' . $dishId] = $merged[$key] ?? 0;
+            }
+            $result[] = $entry;
+        }
+
+        return response()->json([
+            'data' => $result,
+            'dishes' => $dishes->map(fn($d) => ['dish_id' => $d->dish_id, 'name' => $d->dish_name])->values(),
+        ]);
+    }
+
+    /**
+     * Khung giờ cao điểm (7h-22h), tính theo số đơn.
+     * type = 'booking' (booking_tables, giờ lấy từ start_time, lọc theo booking_date)
+     *      | 'delivery' (deliveries, giờ lấy từ created_at, lọc theo created_at)
+     * mode = 'month' (1 dãy 7-22h) | 'weekday_weekend' (2 dãy: T2-T6 và T7-CN)
+     * Loại trừ đơn cancelled.
+     */
+    public function peakHours(Request $request)
+    {
+        $type = $request->get('type', 'booking');
+        $year = (int) $request->get('year', now()->year);
+        $month = (int) $request->get('month', now()->month);
+        $mode = $request->get('mode', 'month');
+
+        if ($type === 'booking') {
+            $baseQuery = DB::table('booking_tables')
+                ->whereYear('booking_date', $year)
+                ->whereMonth('booking_date', $month)
+                ->where('booking_status', '<>', 'cancelled')
+                ->select(
+                    DB::raw('EXTRACT(HOUR FROM start_time)::int as hour'),
+                    DB::raw("EXTRACT(ISODOW FROM booking_date)::int as dow") // 1=T2 ... 7=CN
+                );
+        } else {
+            $baseQuery = DB::table('deliveries')
+                ->whereYear('created_at', $year)
+                ->whereMonth('created_at', $month)
+                ->where('delivery_status', '<>', 'cancelled')
+                ->select(
+                    DB::raw('EXTRACT(HOUR FROM created_at)::int as hour'),
+                    DB::raw('EXTRACT(ISODOW FROM created_at)::int as dow')
+                );
+        }
+
+        $rows = $baseQuery->get();
+
+        $hours = range(7, 22);
+
+        if ($mode === 'weekday_weekend') {
+            $weekday = array_fill_keys($hours, 0);
+            $weekend = array_fill_keys($hours, 0);
+            foreach ($rows as $row) {
+                if ($row->hour < 7 || $row->hour > 22) continue;
+                if ($row->dow >= 1 && $row->dow <= 5) {
+                    $weekday[$row->hour]++;
+                } else {
+                    $weekend[$row->hour]++;
+                }
+            }
+            return response()->json([
+                'data' => [
+                    'weekday' => collect($hours)->map(fn($h) => ['hour' => $h, 'count' => $weekday[$h]])->values(),
+                    'weekend' => collect($hours)->map(fn($h) => ['hour' => $h, 'count' => $weekend[$h]])->values(),
+                ],
+            ]);
+        }
+
+        $counts = array_fill_keys($hours, 0);
+        foreach ($rows as $row) {
+            if ($row->hour < 7 || $row->hour > 22) continue;
+            $counts[$row->hour]++;
+        }
+
+        return response()->json([
+            'data' => collect($hours)->map(fn($h) => ['hour' => $h, 'count' => $counts[$h]])->values(),
+        ]);
+    }
+    
+    /**
      * Danh sách các tháng (year-month) đã có bill, dùng đổ dropdown
      */
     public function availableMonths(Request $request)

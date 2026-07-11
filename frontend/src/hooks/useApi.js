@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import * as authAPI from '@/services/api';
+import { userAPI } from '@/services/api';
 
 /**
  * useAuth - Authentication hook for React
@@ -9,6 +10,8 @@ export const useAuth = () => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [accountDeleted, setAccountDeleted] = useState(false);
+    const pollingRef = useRef(null);
 
     // Load user from localStorage or fetch from API
     useEffect(() => {
@@ -90,8 +93,40 @@ export const useAuth = () => {
             localStorage.removeItem('auth_token');
             localStorage.removeItem('user');
             setUser(null);
+            setAccountDeleted(false);
         }
     }, []);
+
+    // Polling: kiểm tra tài khoản còn tồn tại không (chỉ áp dụng cho user thường,
+    // không áp dụng cho admin). Nếu token không còn hợp lệ (401) -> tài khoản đã bị xóa.
+    useEffect(() => {
+        if (!user || user.role === 'admin') {
+            if (pollingRef.current) {
+                clearInterval(pollingRef.current);
+                pollingRef.current = null;
+            }
+            return;
+        }
+
+        pollingRef.current = setInterval(async () => {
+            try {
+                await userAPI.checkAccountAlive();
+            } catch (err) {
+                if (err.response?.status === 401) {
+                    setAccountDeleted(true);
+                    clearInterval(pollingRef.current);
+                    pollingRef.current = null;
+                }
+            }
+        }, 30000);
+
+        return () => {
+            if (pollingRef.current) {
+                clearInterval(pollingRef.current);
+                pollingRef.current = null;
+            }
+        };
+    }, [user]);
 
     return {
         user,
@@ -102,6 +137,7 @@ export const useAuth = () => {
         register,
         logout,
         isAuthenticated: !!user,
+        accountDeleted,
     };
 };
 

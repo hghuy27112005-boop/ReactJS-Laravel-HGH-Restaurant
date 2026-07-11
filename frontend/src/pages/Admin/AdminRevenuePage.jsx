@@ -150,10 +150,13 @@ const AdminRevenuePage = () => {
 
     if (loading) return <Loading />;
 
-    const monthOptions = availableMonths.map((m) => ({
-        value: `${m.year}-${String(m.month).padStart(2, '0')}`,
-        label: `${m.month}/${m.year}`,
-    }));
+    const currentYearNum = new Date().getFullYear();
+    const monthOptions = availableMonths
+        .filter((m) => Number(m.year) === currentYearNum)
+        .map((m) => ({
+            value: `${m.year}-${String(m.month).padStart(2, '0')}`,
+            label: `${m.month}/${m.year}`,
+        }));
 
     const now = new Date();
     const currentValue = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -272,10 +275,14 @@ const AdminRevenuePage = () => {
                                     tickFormatter={(v) => Number(v).toLocaleString('vi-VN')}
                                     allowDecimals={false}
                                 />
-                                <Tooltip formatter={(v) => `${Number(v).toLocaleString('vi-VN')}đ`} />
+                                <Tooltip
+                                    formatter={(v) => `${Number(v).toLocaleString('vi-VN')}đ`}
+                                    labelFormatter={(label) => viewMode === 'day' ? `Ngày ${label}` : label}
+                                />
                                 <Line
                                     type="monotone"
                                     dataKey="revenue"
+                                    name="Doanh thu"
                                     stroke={RED}
                                     strokeWidth={2}
                                     dot={{ fill: RED, r: 4 }}

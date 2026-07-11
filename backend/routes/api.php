@@ -10,6 +10,12 @@ use App\Http\Controllers\VnpayController;
 
 // Authentication (Public)
 Route::post('/register', [\App\Http\Controllers\AuthController::class, 'register']);
+
+// Server time (public) - dùng để đồng bộ giờ client với server, tránh sai lệch đồng hồ máy khách
+Route::get('/server-time', function () {
+    return response()->json(['now' => now()->toIso8601String()]);
+});
+
 Route::post('/login', [\App\Http\Controllers\AuthController::class, 'login']);
 Route::post('/forgot-password', [\App\Http\Controllers\AuthController::class, 'forgotPassword']);
 
@@ -82,6 +88,7 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
 
     // Deliveries Management
     Route::get('admin/deliveries', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'index']);
+    Route::get('admin/deliveries/stats', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'stats']);
     Route::get('admin/deliveries/{delivery}', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'show']);
     Route::post('admin/deliveries/{delivery}/approve', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'approve']);
     Route::post('admin/deliveries/{delivery}/start', [\App\Http\Controllers\Admin\Admin_DeliveryController::class, 'startDelivery']);
@@ -109,6 +116,10 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::apiResource('admin/discounts', \App\Http\Controllers\Admin\Admin_DiscountController::class);
 
     Route::get('admin/statistics/available-months', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'availableMonths']);
+    Route::get('admin/statistics/order-counts-by-month', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'orderCountsByMonth']);
+    Route::get('admin/statistics/dish-quantity-by-month', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'dishQuantityByMonth']);
+    Route::get('admin/statistics/dish-trend-by-month-range', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'dishTrendByMonthRange']);
+    Route::get('admin/statistics/peak-hours', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'peakHours']);
     Route::get('admin/statistics/available-years', [\App\Http\Controllers\Admin\Admin_StatisticsController::class, 'availableYears']);
 
     // Statistics
