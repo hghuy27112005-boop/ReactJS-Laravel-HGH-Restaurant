@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Mail\OrderNotificationMail;
 use App\Models\Bill;
 use App\Models\Order;
 use App\Models\Dish;
@@ -14,6 +15,7 @@ use App\Models\BookingTable;
 use App\Services\OrderCodeGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 
 class BillController extends Controller
 {
@@ -200,6 +202,19 @@ class BillController extends Controller
             ]);
 
             DB::commit();
+
+            // Đặt bàn cho đúng "hôm nay" (booking_date = ngày tạo đơn) -> gửi mail ngay.
+            // Đặt cho tương lai sẽ được scheduler gửi vào 6h sáng ngày booking_date.
+            if ($validated['order_type'] === 'booking_table' && $validated['booking_table']['start_date'] === today()->toDateString()) {
+                try {
+                    $startTime = substr($validated['booking_table']['start_time'], 0, 5);
+                    $endTime = substr($validated['booking_table']['end_time'], 0, 5);
+                    $bodyLine = "Quý khách có 1 đơn đặt bàn tại nhà hàng chúng tôi trong hôm nay vào lúc ({$startTime} tới {$endTime}).";
+                    Mail::to($user->email)->send(new OrderNotificationMail($bill, $bodyLine));
+                } catch (\Exception $e) {
+                    \Log::error('Gửi mail thông báo đặt bàn hôm nay thất bại: ' . $e->getMessage());
+                }
+            }
 
             return response()->json([
                 'data' => [

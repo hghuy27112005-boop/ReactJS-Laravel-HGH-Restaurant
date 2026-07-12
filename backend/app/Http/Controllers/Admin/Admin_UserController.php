@@ -97,14 +97,14 @@ class Admin_UserController extends Controller
 
         $pendingBills = $this->getPendingBills($user);
 
-        if ($pendingBills->isNotEmpty()) {
-            try {
-                Mail::to($user->email)->send(new UserDeletedMail($user, $pendingBills));
-            } catch (\Exception $e) {
-                return response()->json([
-                    'message' => 'Gửi mail thất bại, tài khoản chưa bị xóa: ' . $e->getMessage(),
-                ], 500);
-            }
+        // Luôn gửi mail thông báo xóa tài khoản, kể cả khi không có đơn dang dở
+        // (lúc đó mail chỉ có nội dung thông báo, không đính kèm PDF).
+        try {
+            Mail::to($user->email)->send(new UserDeletedMail($user, $pendingBills));
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Gửi mail thất bại, tài khoản chưa bị xóa: ' . $e->getMessage(),
+            ], 500);
         }
 
         $user->delete();
@@ -127,7 +127,7 @@ class Admin_UserController extends Controller
                 ->where('order_type', 'booking_table')
                 ->whereHas('bookings', function ($bq) {
                     $bq->where('booking_status', '!=', 'cancelled')
-                        ->whereRaw('booking_date > now()');
+                        ->whereRaw('(booking_date + start_time) > now()');
                 });
         })->pluck('bill_id');
 
@@ -135,7 +135,7 @@ class Admin_UserController extends Controller
             $q->where('user_id', $user->user_id)
                 ->where('order_type', 'delivery')
                 ->whereHas('delivery', function ($dq) {
-                    $dq->where('delivery_status', 'waiting_approval');
+                    $dq->whereNotIn('delivery_status', ['completed', 'cancelled']);
                 });
         })->pluck('bill_id');
 

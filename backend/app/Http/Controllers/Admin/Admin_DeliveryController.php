@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\OrderNotificationMail;
 use App\Models\Delivery;
 use App\Models\Order;
 use App\Models\Stock;
 use App\Services\OrderCodeGenerator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 
 class Admin_DeliveryController extends Controller
 {
@@ -147,6 +149,20 @@ class Admin_DeliveryController extends Controller
             'delivery_status' => 'waiting_confirmation',
             'approved_at' => now(),
         ]);
+
+        // Gửi mail thông báo cho khách khi đơn ship được admin duyệt
+        $delivery->load('order.bill', 'order.user');
+        $bill = $delivery->order?->bill;
+        $customerEmail = $delivery->order?->user?->email;
+
+        if ($bill && $customerEmail) {
+            try {
+                $bodyLine = "Hiện tại quý khách đang có đơn hàng đặt ship, mã hóa đơn là <strong>{$bill->bill_id}</strong>, đơn hàng sẽ được giao tới trong vòng 30 phút.";
+                Mail::to($customerEmail)->send(new OrderNotificationMail($bill, $bodyLine));
+            } catch (\Exception $e) {
+                \Log::error('Gửi mail thông báo duyệt đơn ship thất bại: ' . $e->getMessage());
+            }
+        }
 
         return response()->json([
             'data' => $delivery,

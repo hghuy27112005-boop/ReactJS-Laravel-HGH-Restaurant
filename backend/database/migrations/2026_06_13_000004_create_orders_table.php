@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::create('orders', function (Blueprint $table) {
             $table->string('order_id', 20)->primary();
             $table->string('order_stt', 3)->nullable();
-            $table->foreignId('user_id')->constrained('users', 'user_id');
+            $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
             $table->enum('order_type', ['booking_table', 'delivery']);
             $table->decimal('subtotal_price', 12, 2)->default(0);
             $table->timestamp('created_at')->useCurrent();

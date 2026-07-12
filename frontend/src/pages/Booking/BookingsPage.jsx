@@ -218,7 +218,7 @@ const BookingsPage = () => {
             const bookingDateTime = new Date(`${bookingDate}T${String(sH).padStart(2, '0')}:${String(sM).padStart(2, '0')}:00`);
             const minAllowedDateTime = new Date(getServerNow().getTime() + 60 * 60000);
             if (bookingDateTime < minAllowedDateTime) {
-                alert('Giờ đặt bàn phải cách thời điểm hiện tại ít nhất 60 phút.');
+                alert('Giờ đến phải cách thời điểm hiện tại ít nhất 60 phút.');
                 return;
             }
 
