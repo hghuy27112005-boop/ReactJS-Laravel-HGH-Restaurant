@@ -36,6 +36,7 @@ import AdminDashboardPage from './pages/Admin/AdminDashboardPage';
 import AdminMenuManagement from './pages/Admin/AdminMenuManagement';
 import AdminOrderManagement from './pages/Admin/AdminOrderManagement';
 import AdminReportPage from './pages/Admin/AdminReportPage';
+import AdminSaleOffPage from './pages/Admin/AdminSaleOffPage';
 
 
 (function handleGoogleAuthRedirect() {
@@ -105,6 +106,7 @@ function App() {
               <Route path="/admin/deliveries" element={<ProtectedRoute requireAdmin={true}><AdminDeliveriesPage /></ProtectedRoute>} />
               <Route path="/admin/revenue" element={<ProtectedRoute requireAdmin={true}><AdminRevenuePage /></ProtectedRoute>} />
               <Route path="/admin/reports" element={<ProtectedRoute requireAdmin={true}><AdminReportPage /></ProtectedRoute>} />
+              <Route path="/admin/sale-off" element={<ProtectedRoute requireAdmin={true}><AdminSaleOffPage /></ProtectedRoute>} />
               {/*Payment*/}
               <Route path="/payment-result" element={<PaymentResultPage />} />
               <Route path="/refund-result" element={<RefundResultPage />} />

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\OrderNotificationMail;
 use App\Models\Bill;
 use App\Models\Order;
 use App\Models\Points;
@@ -9,6 +10,7 @@ use App\Services\OrderCodeGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class VnpayController extends Controller
 {
@@ -16,6 +18,7 @@ class VnpayController extends Controller
     {
         $request->validate([
             'order_id' => 'required|exists:orders,order_id',
+            'use_sale_off' => 'sometimes|boolean',
         ]);
 
         $orderId = $request->input('order_id');
@@ -27,9 +30,29 @@ class VnpayController extends Controller
             return response()->json(['message' => 'Order not found'], 404);
         }
 
+        // Luôn tự xác thực sự kiện giảm giá ở server, không tin trực tiếp
+        // giá trị use_sale_off từ client.
+        $saleOffPercentage = null;
+        if ($request->boolean('use_sale_off')) {
+            $activeEvent = \App\Models\SaleOffEvent::getActiveEvent();
+            if ($activeEvent) {
+                $saleOffPercentage = (float) $activeEvent->sale_off_percentage;
+            }
+        }
+
+        // Lưu tạm % giảm giá vào Order để IPN đọc lại — vì IPN là 1 request
+        // hoàn toàn riêng biệt, không còn giữ giá trị use_sale_off của request này.
+        $order->pending_sale_off_percentage = $saleOffPercentage;
+        $order->save();
+
+        $baseAmount = (float) $order->subtotal_price;
+        $finalAmount = $saleOffPercentage !== null
+            ? round($baseAmount * (1 - $saleOffPercentage / 100), 2)
+            : $baseAmount;
+
         // ⚠️ KHÔNG tạo Bill ở đây nữa — chỉ lấy amount để validate
         // Bill sẽ được tạo khi VNPay IPN callback thành công
-        $amount = (int) round((float) $order->subtotal_price);
+        $amount = (int) round($finalAmount);
 
         if ($amount < 1000) {
             return response()->json(['message' => 'Invalid order amount (amount < 1000 VND)'], 422);
@@ -406,11 +429,26 @@ class VnpayController extends Controller
             return false;
         }
 
-        if ((float) $vnpAmount > (float) $bill->total_price + 0.01) {
+        $order = $bill->order;
+        $saleOffPercentage = $order->pending_sale_off_percentage !== null
+            ? (float) $order->pending_sale_off_percentage
+            : null;
+
+        // Số tiền đúng ra phải thu — dựa trên subtotal gốc, có áp giảm giá sự kiện hay không
+        $expectedAmount = $saleOffPercentage !== null
+            ? round((float) $order->subtotal_price * (1 - $saleOffPercentage / 100), 2)
+            : (float) $order->subtotal_price;
+
+        if ((float) $vnpAmount > $expectedAmount + 0.01) {
             return false;
         }
 
-        // Cập nhật lại total_price nếu có giảm giá từ VNPay
+        if ($saleOffPercentage !== null) {
+            $bill->sale_off_percentage = $saleOffPercentage;
+            $bill->sale_off_total_price = $expectedAmount;
+        }
+
+        // Cập nhật lại total_price nếu có giảm giá từ VNPay (hoặc từ sự kiện sale-off)
         if (abs((float) $bill->total_price - (float) $vnpAmount) > 0.01) {
             $bill->total_price = $vnpAmount;
         }
@@ -430,12 +468,29 @@ class VnpayController extends Controller
             $bill->payment_method = 'vnpay';
             $bill->save();
 
+            // Dọn cờ tạm sau khi đã ghi nhận xong vào Bill
+            $order->pending_sale_off_percentage = null;
+            $order->save();
+
             $this->awardPointsAndStats($bill, $bill->order);
 
             if ($bill->order->order_type === 'booking_table') {
                 $booking = $bill->order->bookings->first() ?? $bill->order->bookingTable->first();
                 $date = $booking ? $booking->booking_date : now()->format('Y-m-d');
                 \App\Models\Stock::refillIfLowForOrder($bill->order, $date);
+
+                // Gửi mail thông báo đặt bàn HÔM NAY — chỉ tại đây, khi VNPay đã xác
+                // nhận thanh toán thành công thật sự (không còn ở BillController::store()).
+                if ($booking && \Carbon\Carbon::parse($booking->booking_date)->toDateString() === now()->format('Y-m-d') && $bill->order->user) {
+                    try {
+                        $startTime = substr($booking->start_time, 0, 5);
+                        $endTime = substr($booking->end_time, 0, 5);
+                        $bodyLine = "Quý khách có 1 đơn đặt bàn tại nhà hàng chúng tôi trong hôm nay vào lúc ({$startTime} tới {$endTime}).";
+                        Mail::to($bill->order->user->email)->send(new OrderNotificationMail($bill, $bodyLine));
+                    } catch (\Throwable $e) {
+                        Log::error('Gửi mail thông báo đặt bàn hôm nay thất bại (VNPay): ' . $e->getMessage());
+                    }
+                }
             }
 
             DB::commit();
@@ -607,7 +662,11 @@ class VnpayController extends Controller
             return;
         }
 
-        $basePoints = floor($amountPaid / 1000);
+        // Nếu có áp dụng giảm giá sự kiện, điểm tích lũy cơ bản vẫn tính theo
+        // giá gốc (subtotal) chứ không theo giá đã giảm — giữ đúng quy tắc cũ.
+        $basePoints = $bill->sale_off_percentage !== null
+            ? floor($originalAmount / 1000)
+            : floor($amountPaid / 1000);
         $bonusPoints = 0;
         
         if ($originalAmount >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {

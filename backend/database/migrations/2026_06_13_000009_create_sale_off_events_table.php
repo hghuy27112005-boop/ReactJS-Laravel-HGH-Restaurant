@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('sale_off_events', function (Blueprint $table) {
             $table->id('sale_off_id');
+            $table->string('name', 100);
             $table->decimal('sale_off_percentage', 5, 2); // To enforce <= 100, we could add check constraint or handle in app logic
             $table->timestamp('start_time');
             $table->timestamp('end_time');

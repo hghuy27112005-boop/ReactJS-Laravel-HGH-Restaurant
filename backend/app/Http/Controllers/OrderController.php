@@ -457,13 +457,15 @@ class OrderController extends Controller
             $firstBooking = $bookingRows->first();
 
             return [
-                'bill_id'        => $bill->bill_id,
-                'order_id'       => $order->order_id,
-                'order_stt'      => $order->order_stt,
-                'order_type'     => $order->order_type,
-                'subtotal_price' => $order->subtotal_price,   // giá gốc trước khi giảm giá
-                'total_price'    => $bill->total_price,        // giá thực trả (sau giảm giá VNPay hoặc 0 nếu điểm)
-                'payment_method' => $bill->payment_method,
+                'bill_id'              => $bill->bill_id,
+                'order_id'             => $order->order_id,
+                'order_stt'            => $order->order_stt,
+                'order_type'           => $order->order_type,
+                'subtotal_price'       => $order->subtotal_price,   // giá gốc trước khi giảm giá
+                'total_price'          => $bill->total_price,        // giá thực trả (sau giảm giá VNPay hoặc 0 nếu điểm)
+                'sale_off_percentage'  => $bill->sale_off_percentage,   // % giảm giá sự kiện đã áp dụng (null nếu không dùng)
+                'sale_off_total_price' => $bill->sale_off_total_price, // giá sau khi áp giảm giá sự kiện (null nếu không dùng)
+                'payment_method'       => $bill->payment_method,
                 'is_paid'        => $bill->payment_method !== 'unpaid',
                 'status'         => $bill->payment_method !== 'unpaid' ? 'paid' : 'unpaid',
                 'created_at'     => $order->created_at,

@@ -13,6 +13,8 @@ return new class extends Migration
             $table->string('order_id', 20)->unique();
             $table->foreign('order_id')->references('order_id')->on('orders')->onDelete('cascade');
             $table->decimal('total_price', 12, 2);
+            $table->decimal('sale_off_percentage', 5, 2)->nullable();
+            $table->decimal('sale_off_total_price', 12, 2)->nullable();
             $table->unsignedBigInteger('user_id')->nullable();
             $table->foreign('user_id')->references('user_id')->on('users')->onDelete('set null');
             $table->string('vnp_txn_ref', 50)->nullable();   

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { bookingService, billService, vnpayService, extractListData, userAPI, orderService, stockAPI, serverTimeAPI } from '../../services/api';
+import { bookingService, billService, vnpayService, extractListData, userAPI, orderService, stockAPI, serverTimeAPI, promotionAPI } from '../../services/api';
 import { Loading, ErrorMessage, Card, Badge, EmptyState, Modal } from '../../components/Shared';
 import { useAuthContext } from '../../context/AuthContext';
 
@@ -32,6 +32,10 @@ const BookingsPage = () => {
     const [pointsNeeded, setPointsNeeded] = useState(0);
     const [currentPoints, setCurrentPoints] = useState(0);
     const [stockErrorItems, setStockErrorItems] = useState(null); // null = ẩn, [...] = danh sách món vượt kho
+
+    // Sale-off event states
+    const [saleOffEvent, setSaleOffEvent] = useState(null); // null = không có sự kiện đang diễn ra
+    const [useSaleOff, setUseSaleOff] = useState(true); // mặc định bật khi có sự kiện
 
     // Booking Form State
     const [bookingDate, setBookingDate] = useState('');
@@ -130,6 +134,33 @@ const BookingsPage = () => {
         const timer = setTimeout(() => setError(null), 4000);
         return () => clearTimeout(timer);
     }, [error]);
+
+    // Kiểm tra có sự kiện giảm giá nào đang diễn ra không — chỉ gọi khi vào tới
+    // bước chọn phương thức thanh toán (bookingConfirmModalStep === 2), không cần gọi sớm hơn.
+    useEffect(() => {
+        if (isBookingConfirmModalOpen && bookingConfirmModalStep === 2) {
+            setUseSaleOff(true); // mặc định bật lại mỗi lần vào bước thanh toán
+            (async () => {
+                try {
+                    const res = await promotionAPI.getActive();
+                    const list = extractListData(res);
+                    setSaleOffEvent(list.length > 0 ? list[0] : null);
+                } catch (err) {
+                    console.warn('Không thể kiểm tra sự kiện giảm giá:', err);
+                    setSaleOffEvent(null);
+                }
+            })();
+        }
+    }, [isBookingConfirmModalOpen, bookingConfirmModalStep]);
+
+    // Số tiền thực tế sẽ dùng để thanh toán, có tính giảm giá sự kiện nếu đang bật
+    const getEffectiveTotal = () => {
+        if (saleOffEvent && useSaleOff) {
+            const pct = Number(saleOffEvent.sale_off_percentage);
+            return Math.round(cartTotal * (1 - pct / 100));
+        }
+        return cartTotal;
+    };
 
     useEffect(() => {
         const fetchServerTime = async () => {
@@ -407,8 +438,9 @@ const BookingsPage = () => {
             sessionStorage.setItem('vnpay_pending', '1');
             const vnpayRes = await vnpayService.createPaymentUrl({
                 order_id: createdOrderId,
-                amount: cartTotal,
+                amount: getEffectiveTotal(),
                 order_type: 'booking_table',
+                use_sale_off: !!(saleOffEvent && useSaleOff),
             });
             window.location.href = vnpayRes.data.payment_url;
         } catch (err) {
@@ -428,7 +460,7 @@ const BookingsPage = () => {
             const freshPoints = res.data?.data?.points || 0;
             setCurrentPoints(freshPoints);
 
-            const needed = Math.floor(cartTotal / 100);
+            const needed = Math.floor(getEffectiveTotal() / 100);
             setPointsNeeded(needed);
 
             if (freshPoints < needed) {
@@ -570,7 +602,9 @@ const BookingsPage = () => {
             }
 
             // 2. Thanh toán bằng điểm
-            const res = await orderService.payWithPoints(createdOrderId);
+            const res = await orderService.payWithPoints(createdOrderId, {
+                use_sale_off: !!(saleOffEvent && useSaleOff),
+            });
             const billId = res.data.data.bill_id;
 
             // 3. Xóa cart, session và redirect
@@ -1017,6 +1051,25 @@ const BookingsPage = () => {
                                                     {bookingConfirmError}
                                                 </div>
                                             )}
+                                            {saleOffEvent && (
+                                                <div className="flex items-center justify-between mb-4 px-1">
+                                                    <div>
+                                                        <p className="font-semibold text-gray-700">Sử dụng giảm giá của sự kiện</p>
+                                                        <p className="text-xs text-gray-500">
+                                                            Giảm {Number(saleOffEvent.sale_off_percentage)}% — còn {getEffectiveTotal().toLocaleString('vi-VN')}đ
+                                                        </p>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setUseSaleOff(v => !v)}
+                                                        className={`relative inline-flex items-center w-14 h-7 rounded-full border-2 border-white shadow-inner transition-colors duration-200 ${useSaleOff ? 'bg-green-500' : 'bg-gray-400'}`}
+                                                    >
+                                                        <span
+                                                            className={`inline-block w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 ${useSaleOff ? 'translate-x-1' : 'translate-x-8'}`}
+                                                        />
+                                                    </button>
+                                                </div>
+                                            )}
                                             <div className="space-y-3 mb-6">
                                                 <button
                                                     onClick={handleVnpayPayment}
@@ -1162,11 +1215,19 @@ const BookingsPage = () => {
                                                 <span>Tổng tiền:</span>
                                                 <span className="font-semibold">{Number(bill.subtotal_price).toLocaleString('vi-VN')}đ</span>
                                             </div>
+                                            {bill.sale_off_percentage != null && (
+                                                <div className="flex justify-between text-orange-600">
+                                                    <span>Giảm giá sự kiện:</span>
+                                                    <span className="font-semibold">{Number(bill.sale_off_percentage)}%</span>
+                                                </div>
+                                            )}
                                             {bill.payment_method === 'Points' ? (
                                                 <>
                                                     <div className="flex justify-between text-green-700">
                                                         <span>Đã thanh toán bằng điểm</span>
-                                                        <span className="font-semibold">-{Number(bill.subtotal_price).toLocaleString('vi-VN')}đ</span>
+                                                        <span className="font-semibold">
+                                                            -{Math.floor(Number(bill.sale_off_total_price ?? bill.subtotal_price) / 100).toLocaleString('vi-VN')} điểm
+                                                        </span>
                                                     </div>
                                                     <div className="flex justify-between font-bold text-gray-800">
                                                         <span>Số tiền đã trả:</span>
@@ -1176,7 +1237,7 @@ const BookingsPage = () => {
                                             ) : bill.payment_method === 'vnpay' ? (
                                                 <div className="flex justify-between font-bold text-gray-800">
                                                     <span>Số tiền đã trả:</span>
-                                                    <span className="text-red-600">{Number(bill.total_price || 0).toLocaleString('vi-VN')}đ</span>
+                                                    <span className="text-red-600">{Number(bill.sale_off_total_price ?? bill.total_price ?? 0).toLocaleString('vi-VN')}đ</span>
                                                 </div>
                                             ) : (
                                                 <div className="flex justify-between font-bold text-gray-800">

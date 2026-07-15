@@ -413,7 +413,15 @@ const AdminDeliveriesPage = () => {
                                                 {Number(selectedDelivery.order?.subtotal_price || 0).toLocaleString('vi-VN')}đ
                                             </td>
                                         </tr>
-                                        {selectedDelivery.order?.bill?.payment_method === 'vnpay' && (Number(selectedDelivery.order?.subtotal_price || 0) > Number(selectedDelivery.order?.bill?.total_price || 0)) && (
+                                        {selectedDelivery.order?.bill?.sale_off_percentage != null && (
+                                            <tr>
+                                                <td colSpan={2} className="py-2 px-3 font-bold border border-black text-orange-500">Giảm giá sự kiện:</td>
+                                                <td className="py-2 px-3 text-right font-bold text-orange-500 border border-black">
+                                                    {Number(selectedDelivery.order.bill.sale_off_percentage)}%
+                                                </td>
+                                            </tr>
+                                        )}
+                                        {selectedDelivery.order?.bill?.payment_method === 'vnpay' && selectedDelivery.order?.bill?.sale_off_percentage == null && (Number(selectedDelivery.order?.subtotal_price || 0) > Number(selectedDelivery.order?.bill?.total_price || 0)) && (
                                             <tr>
                                                 <td colSpan={2} className="py-2 px-3 font-bold border border-black text-orange-500">Giảm giá VNPay:</td>
                                                 <td className="py-2 px-3 text-right font-bold text-orange-500 border border-black">
@@ -425,7 +433,7 @@ const AdminDeliveriesPage = () => {
                                             <tr>
                                                 <td colSpan={2} className="py-2 px-3 font-bold border border-black text-green-600">Đã thanh toán bằng điểm:</td>
                                                 <td className="py-2 px-3 text-right font-bold text-green-600 border border-black">
-                                                    -{Math.floor((selectedDelivery.order?.subtotal_price || 0) / 100).toLocaleString('vi-VN')} điểm
+                                                    -{Math.floor((selectedDelivery.order?.bill?.sale_off_total_price ?? selectedDelivery.order?.subtotal_price ?? 0) / 100).toLocaleString('vi-VN')} điểm
                                                 </td>
                                             </tr>
                                         )}

@@ -155,6 +155,16 @@ export const discountAPI = {
 export const promotionAPI = {
     getAll: () => axiosInstance.get('/sale-off-events'),
     getById: (id) => axiosInstance.get(`/sale-off-events/${id}`),
+    // Dùng ở màn thanh toán để hỏi "hiện có sự kiện giảm giá nào đang diễn ra không"
+    getActive: () => axiosInstance.get('/sale-off-events', { params: { active_only: 1 } }),
+};
+
+// Admin - Sale Off Events API
+export const adminSaleOffAPI = {
+    getAll: (filters = {}) => axiosInstance.get('/admin/sale-off-events', { params: filters }),
+    create: (data) => axiosInstance.post('/admin/sale-off-events', data),
+    update: (id, data) => axiosInstance.put(`/admin/sale-off-events/${id}`, data),
+    delete: (id) => axiosInstance.delete(`/admin/sale-off-events/${id}`),
 };
 
 // Stock API (public check endpoint)
@@ -260,7 +270,7 @@ export const billService = {
 
 export const orderService = {
     storeOrder: (data) => orderAPI.create(data),
-    payWithPoints: (orderId) => axiosInstance.post(`/orders/${orderId}/pay-with-points`),
+    payWithPoints: (orderId, data = {}) => axiosInstance.post(`/orders/${orderId}/pay-with-points`, data),
     deleteOrder: (orderId) => orderAPI.delete(orderId),
 };
 

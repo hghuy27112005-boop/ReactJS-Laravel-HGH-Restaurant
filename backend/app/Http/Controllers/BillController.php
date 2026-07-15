@@ -25,7 +25,8 @@ class BillController extends Controller
     public function index(Request $request)
     {
         $query = $request->user()->bills()
-            ->with('order', 'delivery', 'bookingTable');
+            ->with('order', 'delivery', 'bookingTable')
+            ->orderBy('created_at', 'desc');
 
         if ($request->has('order_type')) {
             $query->whereHas('order', function ($q) use ($request) {
@@ -202,19 +203,6 @@ class BillController extends Controller
             ]);
 
             DB::commit();
-
-            // Đặt bàn cho đúng "hôm nay" (booking_date = ngày tạo đơn) -> gửi mail ngay.
-            // Đặt cho tương lai sẽ được scheduler gửi vào 6h sáng ngày booking_date.
-            if ($validated['order_type'] === 'booking_table' && $validated['booking_table']['start_date'] === today()->toDateString()) {
-                try {
-                    $startTime = substr($validated['booking_table']['start_time'], 0, 5);
-                    $endTime = substr($validated['booking_table']['end_time'], 0, 5);
-                    $bodyLine = "Quý khách có 1 đơn đặt bàn tại nhà hàng chúng tôi trong hôm nay vào lúc ({$startTime} tới {$endTime}).";
-                    Mail::to($user->email)->send(new OrderNotificationMail($bill, $bodyLine));
-                } catch (\Exception $e) {
-                    \Log::error('Gửi mail thông báo đặt bàn hôm nay thất bại: ' . $e->getMessage());
-                }
-            }
 
             return response()->json([
                 'data' => [
@@ -498,7 +486,24 @@ class BillController extends Controller
             $bill = $bill->fresh();
         }
 
-        $amount         = (float) $bill->total_price;
+        // Luôn tự xác thực sự kiện giảm giá ở server, không tin trực tiếp
+        // giá trị use_sale_off từ client.
+        $saleOffPercentage = null;
+        if ($request->boolean('use_sale_off')) {
+            $activeEvent = \App\Models\SaleOffEvent::getActiveEvent();
+            if ($activeEvent) {
+                $saleOffPercentage = (float) $activeEvent->sale_off_percentage;
+            }
+        }
+
+        $subtotal = (float) $order->subtotal_price;
+        $saleOffTotalPrice = $saleOffPercentage !== null
+            ? round($subtotal * (1 - $saleOffPercentage / 100), 2)
+            : null;
+
+        // Số điểm cần trừ tính trên giá đã giảm (nếu có áp dụng sự kiện),
+        // ngược lại tính trên giá gốc như cũ.
+        $amount         = $saleOffTotalPrice ?? $subtotal;
         $requiredPoints = (int) floor($amount / 100);
 
         if ($requiredPoints > 0 && $user->points < $requiredPoints) {
@@ -535,6 +540,10 @@ class BillController extends Controller
 
             $bill->payment_method = 'Points';
             $bill->total_price    = 0;
+            if ($saleOffPercentage !== null) {
+                $bill->sale_off_percentage = $saleOffPercentage;
+                $bill->sale_off_total_price = $saleOffTotalPrice;
+            }
             $bill->save();
 
             $order->load(['delivery', 'bookings']);
@@ -577,6 +586,22 @@ class BillController extends Controller
                 $stats->increment('delivery_orders');
             }
             $stats->save();
+
+            // Gửi mail thông báo đặt bàn HÔM NAY — chỉ tại đây, khi thanh toán bằng
+            // điểm đã xác nhận thành công thật sự.
+            if ($order->order_type === 'booking_table') {
+                $firstBt = $firstBt ?? BookingTable::where('order_id', $order->order_id)->first();
+                if ($firstBt && \Carbon\Carbon::parse($firstBt->booking_date)->toDateString() === today()->toDateString()) {
+                    try {
+                        $startTime = substr($firstBt->start_time, 0, 5);
+                        $endTime = substr($firstBt->end_time, 0, 5);
+                        $bodyLine = "Quý khách có 1 đơn đặt bàn tại nhà hàng chúng tôi trong hôm nay vào lúc ({$startTime} tới {$endTime}).";
+                        Mail::to($user->email)->send(new OrderNotificationMail($bill, $bodyLine));
+                    } catch (\Exception $e) {
+                        \Log::error('Gửi mail thông báo đặt bàn hôm nay thất bại (thanh toán bằng điểm): ' . $e->getMessage());
+                    }
+                }
+            }
 
             DB::commit();
 

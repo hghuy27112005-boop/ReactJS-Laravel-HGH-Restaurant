@@ -4,8 +4,8 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
+use App\Services\OrderCodeGenerator;
 
 class OrdersSeeder extends Seeder
 {
@@ -22,6 +22,23 @@ class OrdersSeeder extends Seeder
 
         $minPerMonth = 350;
         $maxPerMonth = 450;
+
+        $generator = new OrderCodeGenerator();
+
+        // Bộ đếm sequence theo ngày, mô phỏng đúng cách BillController::store() đếm
+        // số bản ghi đã tồn tại trong ngày rồi +1. Key là chuỗi 'Y-m-d' để không bị
+        // trùng giữa các tháng khác nhau (vì cùng có ngày 1..28/30/31).
+        $orderSeqByDate = [];          // dùng chung cho order_id + order_stt (cả booking lẫn delivery)
+        $deliverySeqByDate = [];       // riêng cho delivery_id, theo created_at date
+        $bookingTableSeqByDate = [];   // riêng cho booking_id, theo booking_date (đếm theo BÀN)
+        $bookingOrderSeqByDate = [];   // riêng cho booking_stt, theo booking_date (đếm theo ĐƠN)
+
+        $nextSeq = function (array &$store, string $key): int {
+            if (!isset($store[$key])) {
+                $store[$key] = 0;
+            }
+            return ++$store[$key];
+        };
 
         // 1) Ensure we have 20 users (including admin in DB already)
         $existingUsers = DB::table('users')->orderBy('user_id')->get();
@@ -86,10 +103,6 @@ class OrdersSeeder extends Seeder
             return;
         }
 
-        $genId = function ($prefix = 'ID') {
-            return strtoupper($prefix . Str::random(12));
-        };
-
         $occupied = [];
 
         $hasOverlap = function ($tableNumber, $date, $start, $end) {
@@ -133,10 +146,12 @@ class OrdersSeeder extends Seeder
                 $createdSecond = rand(0, 59);
                 $createdAt = now()->setDate($year, $month, $createdDay)
                     ->setTime($createdHour, $createdMinute, $createdSecond);
+                $createdDateKey = $createdAt->toDateString();
 
                 // booking_date: cùng tháng, sau created_at (ngày lớn hơn), trong tháng đó
                 $bookingDay = rand($createdDay + 1, $daysInMonth);
                 $bookingDate = now()->setDate($year, $month, $bookingDay)->startOfDay();
+                $bookingDateKey = $bookingDate->toDateString();
 
                 // giờ đặt bàn trong khung 7h-20h30 (để đặt tối đa 90' vẫn kết thúc trước/đúng 22h)
                 $startHour = rand(7, 20);
@@ -152,12 +167,12 @@ class OrdersSeeder extends Seeder
                 $tableNumber = null;
                 do {
                     $tableNumber = $tableNumbers[array_rand($tableNumbers)];
-                    $inMemory = $occupied[$tableNumber][$bookingDate->toDateString()] ?? [];
+                    $inMemory = $occupied[$tableNumber][$bookingDateKey] ?? [];
                     $conflict = false;
                     foreach ($inMemory as $range) {
                         if (!($endTime <= $range[0] || $startTime >= $range[1])) { $conflict = true; break; }
                     }
-                    if (!$conflict && $hasOverlap($tableNumber, $bookingDate->toDateString(), $startTime, $endTime)) {
+                    if (!$conflict && $hasOverlap($tableNumber, $bookingDateKey, $startTime, $endTime)) {
                         $conflict = true;
                     }
                     $tries++;
@@ -168,12 +183,17 @@ class OrdersSeeder extends Seeder
                     continue;
                 }
 
-                $occupied[$tableNumber][$bookingDate->toDateString()][] = [$startTime, $endTime];
+                $occupied[$tableNumber][$bookingDateKey][] = [$startTime, $endTime];
 
-                $orderId = $genId('ORD');
+                // order_id / order_stt: sequence đếm theo created_at date, DÙNG CHUNG
+                // cho cả booking lẫn delivery (đúng như Order::whereDate('created_at', ...)->count())
+                $orderSequence = $nextSeq($orderSeqByDate, $createdDateKey);
+                $orderId = $generator->generateOrderId($createdDateKey, $orderSequence);
+                $orderStt = $generator->generateOrderStt($orderSequence);
+
                 DB::table('orders')->insert([
                     'order_id' => $orderId,
-                    'order_stt' => null,
+                    'order_stt' => $orderStt,
                     'user_id' => $userId,
                     'order_type' => 'booking_table',
                     'subtotal_price' => 0,
@@ -199,7 +219,17 @@ class OrdersSeeder extends Seeder
 
                 DB::table('orders')->where('order_id', $orderId)->update(['subtotal_price' => $subtotal]);
 
-                $billId = $genId('BIL');
+                // booking_stt: sequence đếm theo booking_date, tính theo ĐƠN (1 đơn = 1 booking_stt)
+                $bookingOrderSequence = $nextSeq($bookingOrderSeqByDate, $bookingDateKey);
+                $bookingStt = $generator->generateBookingStt($bookingDateKey, $bookingOrderSequence);
+
+                // booking_id: sequence đếm theo booking_date, tính theo BÀN
+                $bookingTableSequence = $nextSeq($bookingTableSeqByDate, $bookingDateKey);
+                $bookingId = $generator->generateBookingId($bookingDateKey, $bookingTableSequence);
+
+                // bill_id của đơn booking = booking_stt (đúng như BillController::store(),
+                // vì relatedId luôn được gán = $bookingStt ở bàn đầu tiên của đơn)
+                $billId = $bookingStt;
                 $paymentMethod = rand(0, 1) ? 'Points' : 'VNPay';
                 DB::table('bills')->insert([
                     'bill_id' => $billId,
@@ -211,13 +241,12 @@ class OrdersSeeder extends Seeder
                     'created_at' => $createdAt,
                 ]);
 
-                $bookingId = $genId('BKG');
                 DB::table('booking_tables')->insert([
                     'booking_id' => $bookingId,
-                    'booking_stt' => null,
+                    'booking_stt' => $bookingStt,
                     'order_id' => $orderId,
                     'table_number' => $tableNumber,
-                    'booking_date' => $bookingDate->toDateString(),
+                    'booking_date' => $bookingDateKey,
                     'start_time' => $startTime,
                     'end_time' => $endTime,
                     'B_payment_status' => 'paid',
@@ -239,11 +268,16 @@ class OrdersSeeder extends Seeder
                 $minute = rand(0, 59);
                 $second = rand(0, 59);
                 $createdAt = now()->setDate($year, $month, $day)->setTime($hour, $minute, $second);
+                $createdDateKey = $createdAt->toDateString();
 
-                $orderId = $genId('ORD');
+                // order_id / order_stt: dùng CHUNG bộ đếm $orderSeqByDate với booking ở trên
+                $orderSequence = $nextSeq($orderSeqByDate, $createdDateKey);
+                $orderId = $generator->generateOrderId($createdDateKey, $orderSequence);
+                $orderStt = $generator->generateOrderStt($orderSequence);
+
                 DB::table('orders')->insert([
                     'order_id' => $orderId,
-                    'order_stt' => null,
+                    'order_stt' => $orderStt,
                     'user_id' => $userId,
                     'order_type' => 'delivery',
                     'subtotal_price' => 0,
@@ -269,7 +303,12 @@ class OrdersSeeder extends Seeder
 
                 DB::table('orders')->where('order_id', $orderId)->update(['subtotal_price' => $subtotal]);
 
-                $billId = $genId('BIL');
+                // delivery_id: sequence riêng theo created_at date, chỉ đếm trong bảng deliveries
+                $deliverySequence = $nextSeq($deliverySeqByDate, $createdDateKey);
+                $deliveryId = $generator->generateDeliveryId($createdDateKey, $deliverySequence);
+
+                // bill_id của đơn delivery = delivery_id (đúng như BillController::store())
+                $billId = $deliveryId;
                 $paymentMethod = rand(0, 1) ? 'Points' : 'VNPay';
                 DB::table('bills')->insert([
                     'bill_id' => $billId,
@@ -281,7 +320,6 @@ class OrdersSeeder extends Seeder
                     'created_at' => $createdAt,
                 ]);
 
-                $deliveryId = $genId('DLY');
                 $isCompleted = (bool) rand(0, 1);
                 $deliveryStatus = $isCompleted ? 'completed' : 'cancelled';
                 $dPayment = $isCompleted ? 'paid' : 'refunded';

@@ -22,12 +22,14 @@ class Order extends Model
         'user_id',
         'order_type',
         'subtotal_price',
+        'pending_sale_off_percentage',
         'created_at',
         'updated_at',
     ];
 
     protected $casts = [
         'subtotal_price' => 'decimal:2',
+        'pending_sale_off_percentage' => 'decimal:2',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];

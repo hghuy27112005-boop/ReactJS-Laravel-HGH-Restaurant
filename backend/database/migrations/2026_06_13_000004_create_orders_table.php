@@ -15,6 +15,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users', 'user_id')->onDelete('cascade');
             $table->enum('order_type', ['booking_table', 'delivery']);
             $table->decimal('subtotal_price', 12, 2)->default(0);
+            $table->decimal('pending_sale_off_percentage', 5, 2)->nullable();
             $table->timestamp('created_at')->useCurrent();
             $table->timestamp('updated_at')->useCurrent();
         });

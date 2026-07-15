@@ -228,8 +228,12 @@ class DeliveryController extends Controller
                 $user->points -= $pointsToRevoke;
             }
 
-            // Hoàn điểm dựa trên order->subtotal_price
-            $amount = (float) $order->subtotal_price;
+            // Hoàn điểm đúng bằng số điểm đã bị trừ lúc thanh toán — nếu lúc đó
+            // có áp dụng giảm giá sự kiện (sale_off_total_price), phải hoàn theo
+            // giá đã giảm đó, không phải giá gốc, để tránh user lời điểm khi hủy đơn.
+            $amount = $bill->sale_off_total_price !== null
+                ? (float) $bill->sale_off_total_price
+                : (float) $order->subtotal_price;
             $refundPoints = (int) floor($amount / 100);
             
             if ($refundPoints > 0) {

@@ -332,7 +332,15 @@ const OrdersPage = () => {
                                         {Number(detailBill.subtotal_price || detailBill.total_price || 0).toLocaleString('vi-VN')}đ
                                     </td>
                                 </tr>
-                                {detailBill.payment_method === 'vnpay' && (Number(detailBill.subtotal_price || 0) > Number(detailBill.total_price)) && (
+                                {detailBill.sale_off_percentage != null && (
+                                    <tr>
+                                        <td colSpan={2} className="py-2 px-3 font-bold border border-black text-orange-500">Giảm giá sự kiện:</td>
+                                        <td className="py-2 px-3 text-right font-bold text-orange-500 border border-black">
+                                            {Number(detailBill.sale_off_percentage)}%
+                                        </td>
+                                    </tr>
+                                )}
+                                {detailBill.payment_method === 'vnpay' && detailBill.sale_off_percentage == null && (Number(detailBill.subtotal_price || 0) > Number(detailBill.total_price)) && (
                                     <tr>
                                         <td colSpan={2} className="py-2 px-3 font-bold border border-black text-orange-500">Giảm giá VNPay:</td>
                                         <td className="py-2 px-3 text-right font-bold text-orange-500 border border-black">
@@ -344,7 +352,7 @@ const OrdersPage = () => {
                                     <tr>
                                         <td colSpan={2} className="py-2 px-3 font-bold border border-black text-green-600">Đã thanh toán bằng điểm:</td>
                                         <td className="py-2 px-3 text-right font-bold text-green-600 border border-black">
-                                            -{Math.floor(detailBill.subtotal_price / 100).toLocaleString('vi-VN')} điểm
+                                            -{Math.floor((detailBill.sale_off_total_price ?? detailBill.subtotal_price) / 100).toLocaleString('vi-VN')} điểm
                                         </td>
                                     </tr>
                                 )}

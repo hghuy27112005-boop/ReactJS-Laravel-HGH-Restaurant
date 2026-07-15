@@ -20,11 +20,15 @@ class Bill extends Model
         'user_id',
         'total_price',
         'payment_method',
+        'sale_off_percentage',
+        'sale_off_total_price',
         'created_at',
     ];
 
     protected $casts = [
         'total_price' => 'decimal:2',
+        'sale_off_percentage' => 'decimal:2',
+        'sale_off_total_price' => 'decimal:2',
         'created_at' => 'datetime',
     ];
 

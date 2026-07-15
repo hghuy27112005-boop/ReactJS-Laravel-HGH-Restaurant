@@ -119,7 +119,11 @@
                 $discount = $subtotal - $total;
 
                 $user = $order->user ?? null;
-                $basePoints = floor($total / 1000);
+                // Điểm tích lũy (basePoints) chỉ phát sinh ở luồng VNPay, và luôn tính
+                // trên giá gốc (subtotal) — khớp đúng quy tắc "điểm luôn tính theo giá
+                // gốc trước giảm" và khớp logic awardPointsAndStats() bên backend.
+                // Luồng Points không phát sinh basePoints (giữ 0 như cũ).
+                $basePoints = $bill->payment_method === 'vnpay' ? floor($subtotal / 1000) : 0;
                 $bonusPoints = 0;
                 
                 if ($user && $subtotal >= 100000 && $user->role !== 'admin' && $user->membership !== 'administrator') {
@@ -135,7 +139,17 @@
                 $totalPoints = $basePoints + $bonusPoints;
             @endphp
             
-            @if($bill->payment_method === 'Points')
+            @if($bill->sale_off_percentage !== null)
+                {{-- Hóa đơn có áp dụng giảm giá sự kiện --}}
+                <p style="font-size: 16px; margin-bottom: 5px;">Số tiền phải trả: {{ number_format($subtotal, 0, ',', '.') }} VNĐ</p>
+                <p style="font-size: 14px; color: #E67E22; margin-bottom: 5px;">Giảm giá sự kiện: {{ number_format($bill->sale_off_percentage, 0, ',', '.') }}%</p>
+                @if($bill->payment_method === 'Points')
+                    <p style="font-size: 14px; color: #27AE60; margin-bottom: 5px;">Đã thanh toán bằng điểm: -{{ number_format(floor($bill->sale_off_total_price / 100), 0, ',', '.') }} điểm</p>
+                    <p class="total-amount">Số tiền đã trả: {{ number_format($total, 0, ',', '.') }} VNĐ</p>
+                @else
+                    <p class="total-amount">Số tiền đã trả: {{ number_format($total, 0, ',', '.') }} VNĐ</p>
+                @endif
+            @elseif($bill->payment_method === 'Points')
                 <p style="font-size: 16px; margin-bottom: 5px;">Số tiền phải trả: {{ number_format($subtotal, 0, ',', '.') }} VNĐ</p>
                 <p style="font-size: 14px; color: #27AE60; margin-bottom: 5px;">Đã thanh toán bằng điểm: -{{ number_format(floor($subtotal / 100), 0, ',', '.') }} điểm</p>
             @elseif($discount > 0 && $bill->payment_method === 'vnpay')
