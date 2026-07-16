@@ -22,7 +22,6 @@ const AdminUsersPage = () => {
     const [pageInput, setPageInput] = useState('1');
 
     const [searchInput, setSearchInput] = useState('');
-    const [highlightUserId, setHighlightUserId] = useState(null);
 
     const [deleteTarget, setDeleteTarget] = useState(null); // user object
     const [deleting, setDeleting] = useState(false);
@@ -41,12 +40,6 @@ const AdminUsersPage = () => {
             setCurrentPage(payload.pagination.current_page);
             setLastPage(payload.pagination.last_page);
             setPageInput(String(payload.pagination.current_page));
-
-            if (search && payload.matched_user_id) {
-                setHighlightUserId(payload.matched_user_id);
-            } else {
-                setHighlightUserId(null);
-            }
         } catch (err) {
             setError('Lỗi tải danh sách người dùng');
             console.error(err);
@@ -69,7 +62,6 @@ const AdminUsersPage = () => {
         let page = parseInt(pageInput, 10);
         if (isNaN(page) || page < 1) page = 1;
         if (page > lastPage) page = lastPage;
-        setHighlightUserId(null);
         fetchUsers(page);
     };
 
@@ -130,11 +122,10 @@ const AdminUsersPage = () => {
                             </thead>
                             <tbody>
                                 {users.map((user) => {
-                                    const isHighlighted = highlightUserId === user.user_id;
                                     return (
                                         <tr
                                             key={user.user_id}
-                                            className={`border-b ${isHighlighted ? 'bg-yellow-400 text-white' : 'hover:bg-gray-50'}`}
+                                            className="border-b hover:bg-gray-50"
                                         >
                                             <td className="px-4 py-2">{user.stt}</td>
                                             <td className="px-4 py-2 font-semibold">{user.username}</td>

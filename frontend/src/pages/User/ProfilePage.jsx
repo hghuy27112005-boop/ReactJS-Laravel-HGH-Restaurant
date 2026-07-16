@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Cropper from "react-easy-crop"; // npm install react-easy-crop
+import { useAuthContext } from "../../context/AuthContext";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
@@ -254,6 +255,7 @@ function Btn({ children, onClick, variant = "outline", disabled, style = {}, typ
 //  ProfilePage
 // ═══════════════════════════════════════════════════════════════════════════
 export default function ProfilePage() {
+  const { updateUser } = useAuthContext();
   const { toast, show: showToast } = useToast();
 
   const [user, setUser] = useState(null);
@@ -352,6 +354,7 @@ export default function ProfilePage() {
       if (res.ok && json.success) {
         await showToast(json.message, "success");
         setUser((u) => ({ ...u, avatar_url: json.avatar_url }));
+        updateUser({ avatar_url: json.avatar_url });
         setPreviewAvatarUrl(null);
         setCroppedBlob(null);
       } else {
@@ -377,6 +380,7 @@ export default function ProfilePage() {
       if (res.ok && json.success) {
         await showToast(json.message, "success");
         setUser((u) => ({ ...u, ...json.data }));
+        updateUser(json.data);
         setEditMode(false);
       } else {
         const msg = json.message || "Cập nhật thất bại";

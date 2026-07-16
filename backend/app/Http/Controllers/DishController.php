@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Dish;
 use App\Models\Stock;
+use App\Models\OrderItem;
 use App\Services\OrderCodeGenerator;
 use Carbon\Carbon;
 
@@ -231,13 +232,29 @@ class DishController extends Controller
             ], 404);
         }
 
+        // Nếu món đã từng thực sự được đặt hàng (có mặt trong order_items) thì
+        // không cho xóa cứng, chỉ gợi ý ẩn. Nếu chưa từng đặt, cho phép xóa hẳn.
+        $hasBeenOrdered = OrderItem::where('dish_id', $id)->exists();
+
+        if ($hasBeenOrdered) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Không thể xóa món ăn này vì đã từng phát sinh trong đơn hàng. Hãy dùng nút "Ẩn" để ngừng bán món này thay vì xóa hẳn.'
+            ], 409);
+        }
+
         try {
             // Lưu lại tên ảnh gốc trước khi xóa (vì sau khi $dish->delete() thành công,
             // object $dish vẫn còn trong PHP nên vẫn đọc được, nhưng để rõ ràng ta lấy trước)
             $imageName = $dish->getRawOriginal('image_url');
 
-            // Xóa record trong DB TRƯỚC. Nếu bị chặn bởi khóa ngoại (vd: bảng stocks, order_items...)
-            // thì sẽ ném exception ngay tại đây -> file ảnh chưa bị động tới, vẫn an toàn.
+            // Món chưa từng được đặt hàng -> chỉ còn ràng buộc với bảng stocks (được
+            // tự động tạo khi món hiển thị lên menu) -> xóa các bản ghi stock liên quan
+            // trước để giải phóng khóa ngoại, sau đó mới xóa món.
+            Stock::where('dish_id', $id)->delete();
+
+            // Xóa record trong DB. Nếu vẫn còn bị chặn bởi khóa ngoại nào khác phát sinh
+            // sau này thì sẽ ném exception ngay tại đây -> file ảnh chưa bị động tới, vẫn an toàn.
             $dish->delete();
 
             // Chỉ xóa file ảnh SAU KHI đã chắc chắn xóa DB thành công

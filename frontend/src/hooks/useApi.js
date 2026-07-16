@@ -97,6 +97,14 @@ export const useAuth = () => {
         }
     }, []);
 
+    const updateUser = useCallback((partialData) => {
+        setUser((prev) => {
+            const updated = { ...prev, ...partialData };
+            localStorage.setItem('user', JSON.stringify(updated));
+            return updated;
+        });
+    }, []);
+
     // Polling: kiểm tra tài khoản còn tồn tại không (chỉ áp dụng cho user thường,
     // không áp dụng cho admin). Nếu token không còn hợp lệ (401) -> tài khoản đã bị xóa.
     useEffect(() => {
@@ -136,6 +144,7 @@ export const useAuth = () => {
         login,
         register,
         logout,
+        updateUser,
         isAuthenticated: !!user,
         accountDeleted,
     };

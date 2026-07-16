@@ -169,7 +169,7 @@ const AdminMenuManagement = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Xóa vĩnh viễn món này khỏi hệ thống? Hành động này không thể hoàn tác. Nếu món đã từng được đặt hàng, hệ thống sẽ không cho xóa.")) return;
+        if (!window.confirm("Xóa vĩnh viễn món này khỏi hệ thống?")) return;
         try {
             await adminAPI.dishes.delete(id);
             alert("Đã xóa món ăn thành công!");

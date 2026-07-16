@@ -40,37 +40,6 @@ class Admin_UserController extends Controller
             return $items;
         };
 
-        // Khi search: FE cần biết user nằm ở trang nào để tự nhảy tới, nên
-        // tính rank của user theo thứ tự user_id trước khi phân trang chuẩn.
-        if ($request->filled('search')) {
-            $matched = (clone $query)->orderBy('user_id')->get(['user_id']);
-            $firstMatchId = $matched->first()?->user_id;
-
-            $targetPage = 1;
-            if ($firstMatchId) {
-                $position = User::where('role', '!=', 'admin')
-                    ->where('user_id', '<', $firstMatchId)
-                    ->orderBy('user_id')
-                    ->count();
-                $targetPage = intdiv($position, $perPage) + 1;
-            }
-
-            $users = User::where('role', '!=', 'admin')
-                ->orderBy('user_id')
-                ->paginate($perPage, ['*'], 'page', $targetPage);
-
-            return response()->json([
-                'data' => $attachStt($users, $users->currentPage()),
-                'pagination' => [
-                    'total' => $users->total(),
-                    'per_page' => $users->perPage(),
-                    'current_page' => $users->currentPage(),
-                    'last_page' => $users->lastPage(),
-                ],
-                'matched_user_id' => $firstMatchId,
-            ]);
-        }
-
         $users = $query->orderBy('user_id')->paginate($perPage);
 
         return response()->json([

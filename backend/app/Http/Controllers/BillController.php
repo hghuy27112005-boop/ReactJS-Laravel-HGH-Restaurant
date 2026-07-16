@@ -105,9 +105,18 @@ class BillController extends Controller
             $totalAmount = round($subtotalBeforePoints, 2);
 
             $generator = new OrderCodeGenerator();
-            $orderSequence = Order::whereDate('created_at', today())->count() + 1;
-            $deliverySequence = Delivery::whereDate('created_at', today())->count() + 1;
-            $bookingSequence = BookingTable::whereDate('created_at', today())->count() + 1;
+            $todayDmy = today()->format('dmy');
+
+            // Dùng MAX(order_stt) thay vì COUNT(*) để sinh số thứ tự tiếp theo — tránh
+            // trường hợp số bị lùi lại (và trùng khóa chính) khi có đơn cũ bị xóa
+            // (ví dụ: cascade xóa khi admin xóa tài khoản người dùng).
+            $maxOrderStt = Order::whereDate('created_at', today())->max('order_stt');
+            $orderSequence = $maxOrderStt ? ((int) $maxOrderStt) + 1 : 1;
+
+            $maxDeliverySeq = Delivery::where('delivery_id', 'like', $todayDmy . '2%')
+                ->selectRaw('MAX(CAST(RIGHT(delivery_id, 3) AS INTEGER)) as max_seq')
+                ->value('max_seq');
+            $deliverySequence = $maxDeliverySeq ? ((int) $maxDeliverySeq) + 1 : 1;
 
             $orderId = $generator->generateOrderId(today()->toDateString(), $orderSequence);
             $orderStt = $generator->generateOrderStt($orderSequence);
@@ -151,13 +160,22 @@ class BillController extends Controller
                 $endTime   = $validated['booking_table']['end_time'];   // e.g. "09:00"
 
                 $bookingDate = $validated['booking_table']['start_date'];
-                $baseCount = BookingTable::where('booking_date', $bookingDate)->count();
+                $bookingDatePrefix = \Carbon\Carbon::parse($bookingDate)->format('dmy') . '1';
+
+                // Dùng MAX(số thứ tự đã dùng) thay vì COUNT(*) để tránh bị lùi số khi
+                // có booking cũ bị xóa (ví dụ: cascade xóa khi admin xóa tài khoản).
+                $maxBookingSeq = BookingTable::where('booking_id', 'like', $bookingDatePrefix . '%')
+                    ->selectRaw('MAX(CAST(RIGHT(booking_id, 3) AS INTEGER)) as max_seq')
+                    ->value('max_seq');
+                $baseCount = $maxBookingSeq ?? 0;
 
                 // booking_stt đếm theo SỐ ĐƠN (order_id khác nhau), không theo số bàn —
                 // để tránh nhảy số khi 1 đơn đặt nhiều bàn cùng lúc.
-                $orderCountForDate = BookingTable::where('booking_date', $bookingDate)
-                    ->distinct('order_id')
-                    ->count('order_id');
+                $maxBookingSttSeq = BookingTable::where('booking_date', $bookingDate)
+                    ->where('booking_stt', 'like', $bookingDatePrefix . '%')
+                    ->selectRaw('MAX(CAST(RIGHT(booking_stt, 3) AS INTEGER)) as max_seq')
+                    ->value('max_seq');
+                $orderCountForDate = $maxBookingSttSeq ?? 0;
                 $bookingStt = $generator->generateBookingStt($bookingDate, $orderCountForDate + 1);
 
                 $tableIndex = 0;
